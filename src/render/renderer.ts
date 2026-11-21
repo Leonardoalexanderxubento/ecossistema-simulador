@@ -66,6 +66,29 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.grid, 0, 0, this.canvas.width, this.canvas.height);
+    this.drawAnimals();
+  }
+
+  private drawAnimals(): void {
+    const ctx = this.ctx;
+    const s = this.cellSize;
+    for (const a of this.world.animals) {
+      if (!a.alive) continue;
+      const px = a.x * s;
+      const py = a.y * s;
+      const young = a.age < 240 ? 0.7 : 1;
+      if (a.species === 'rabbit') {
+        const r = 2.4 * a.traits.size * young;
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(px + 0.8, py + 1.2, r, r * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f1e4c8';
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   private paintGround(): void {

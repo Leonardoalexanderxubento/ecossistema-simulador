@@ -6,11 +6,17 @@ export interface PlantSettings {
   growthRate: number;
   /** Chance por tick de uma célula vazia ser colonizada por uma vizinha. */
   spreadChance: number;
+  /** Chance por tick de uma semente brotar sozinha numa célula vazia. */
+  seedChance: number;
 }
 
+/** Biomassa mínima que sobra depois de comida: as raízes rebrotam. */
+export const ROOTS = 0.02;
+
 export const defaultPlantSettings: PlantSettings = {
-  growthRate: 0.012,
+  growthRate: 0.004,
   spreadChance: 0.02,
+  seedChance: 0.00002,
 };
 
 /**
@@ -56,7 +62,8 @@ export class Plants {
         } else {
           // Célula vazia: pode ser colonizada por vizinhas bem desenvolvidas.
           const neighbors = neighborBiomass(b, cols, rows, x, y);
-          out[i] = neighbors > 0 && rng.chance(settings.spreadChance * neighbors * f) ? 0.05 : 0;
+          const colonized = neighbors > 0 && rng.chance(settings.spreadChance * neighbors * f);
+          out[i] = colonized || rng.chance(settings.seedChance * f) ? 0.05 : 0;
         }
       }
     }
@@ -65,10 +72,10 @@ export class Plants {
 
   /** Retira até `amount` de biomassa da célula e devolve quanto foi comido. */
   eat(index: number, amount: number): number {
-    const available = this.biomass[index];
+    const available = this.biomass[index] - ROOTS;
+    if (available <= 0) return 0;
     const eaten = Math.min(available, amount);
-    const left = available - eaten;
-    this.biomass[index] = left < 0.02 ? 0 : left;
+    this.biomass[index] -= eaten;
     return eaten;
   }
 
