@@ -7,11 +7,11 @@ const PLANT_NUTRITION = 15;
 /** Biomassa que um coelho consegue comer por tick. */
 const BITE = 0.06;
 /** Energia que uma raposa ganha ao comer um coelho de tamanho 1. */
-const RABBIT_MEAT = 55;
+const RABBIT_MEAT = 65;
 /** Distância (em células) de onde a raposa consegue dar o bote. */
 const POUNCE_DISTANCE = 1.4;
 /** Chance base de o bote dar certo (ajustada por tamanho e velocidade). */
-const POUNCE_CHANCE = 0.3;
+const POUNCE_CHANCE = 0.36;
 /** Ticks que a raposa precisa descansar depois de um bote. */
 const POUNCE_REST = 18;
 /** Multiplicador de velocidade em fuga ou perseguição (custa mais energia). */
@@ -67,14 +67,15 @@ export function updateFox(world: World, a: Animal): void {
     moved = wander(world, a, 0.4);
   }
 
-  a.energy -= metabolism(a, moved);
+  a.energy -= metabolism(a, moved, world.climate.cold);
 }
 
 /** Gasto de energia do tick, que depende do corpo e de quanto se moveu. */
-export function metabolism(a: Animal, moved: number): number {
+export function metabolism(a: Animal, moved: number, cold = 1): number {
   const cfg = SPECIES[a.species];
   const { size, vision } = a.traits;
-  const body = cfg.baseMetabolism * size ** 0.75;
+  // No frio, manter o corpo aquecido custa mais.
+  const body = cfg.baseMetabolism * size ** 0.75 * cold;
   const senses = vision * 0.0025;
   const motion = cfg.moveCost * moved * moved * size;
   return body + senses + motion;
@@ -123,7 +124,7 @@ export function updateRabbit(world: World, a: Animal): void {
   }
 
   a.retarget--;
-  a.energy -= metabolism(a, moved);
+  a.energy -= metabolism(a, moved, world.climate.cold);
 }
 
 /** Adulto, descansado e com energia para gastar com filhotes. */

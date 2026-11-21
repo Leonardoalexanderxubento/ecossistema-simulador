@@ -1,4 +1,5 @@
 import { Animal, type Traits } from './animal';
+import { climateAt, type Climate } from './climate';
 import { maxEnergy, releasePartner, updateFox, updateRabbit } from './behavior';
 import { GENES, crossover, defaultMutation, founderTraits, type MutationSettings } from './genes';
 import { Plants, defaultPlantSettings, type PlantSettings } from './plants';
@@ -22,10 +23,12 @@ export interface WorldSettings {
   /** Se verdadeiro, migrantes chegam quando uma espécie quase desaparece. */
   migration: boolean;
   mutation: MutationSettings;
+  /** Estações do ano: crescimento das plantas, frio e calor variam. */
+  seasons: boolean;
 }
 
 export function defaultSettings(): WorldSettings {
-  return { plants: { ...defaultPlantSettings }, migration: true, mutation: { ...defaultMutation } };
+  return { plants: { ...defaultPlantSettings }, migration: true, mutation: { ...defaultMutation }, seasons: true };
 }
 
 /** A cada quantos ticks a migração é verificada, e abaixo de quantos animais. */
@@ -58,6 +61,8 @@ export class World {
   /** Média dos genes da última população com tamanho razoável (usada por migrantes). */
   private lastKnownTraits: Partial<Record<Species, Traits>> = {};
   tick = 0;
+  /** Clima do tick atual. */
+  climate: Climate;
   private births: Animal[] = [];
 
   constructor(readonly options: WorldOptions, settings: WorldSettings = defaultSettings()) {
@@ -65,6 +70,7 @@ export class World {
     this.terrain = new Terrain(options.cols, options.rows, this.rng);
     this.plants = new Plants(this.terrain, this.rng);
     this.settings = settings;
+    this.climate = climateAt(0, settings.seasons);
     this.index = {
       rabbit: new SpatialHash(options.cols, options.rows),
       fox: new SpatialHash(options.cols, options.rows),
@@ -92,7 +98,8 @@ export class World {
   }
 
   step(): void {
-    this.plants.step(this.rng, this.settings.plants);
+    this.climate = climateAt(this.tick, this.settings.seasons);
+    this.plants.step(this.rng, this.settings.plants, this.climate.growth);
     for (const species of SPECIES_LIST) {
       this.index[species].rebuild(this.animals.filter((a) => a.species === species));
     }

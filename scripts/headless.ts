@@ -20,7 +20,7 @@ for (let t = 0; t <= ticks; t++) {
     const genes = (s: typeof r) =>
       `vel ${s.traits.speed.toFixed(3)} vis ${s.traits.vision.toFixed(1)} tam ${s.traits.size.toFixed(2)} ger ${s.maxGeneration}`;
     console.log(
-      `tick ${String(t).padStart(6)}  plantas ${plants.padStart(5)}  ` +
+      `tick ${String(t).padStart(6)} ${['pri', 'ver', 'out', 'inv'][world.climate.season]}  plantas ${plants.padStart(5)}  ` +
         `coelhos ${String(r.count).padStart(4)} [${genes(r)}]  raposas ${String(f.count).padStart(3)} [${genes(f)}]`,
     );
   }

@@ -14,6 +14,8 @@ export interface ChartOptions {
   formatY?: (v: number) => string;
   formatRightY?: (v: number) => string;
   rightMax?: number;
+  /** Faixas de fundo destacadas, em unidades de x (ex.: invernos). */
+  bands?: [from: number, to: number][];
 }
 
 /** Gráfico de linhas simples em canvas, nítido em telas de alta densidade. */
@@ -51,6 +53,11 @@ export class LineChart {
     const x0 = x[0];
     const x1 = x[x.length - 1];
     const px = (v: number) => pad.left + ((v - x0) / (x1 - x0 || 1)) * w;
+
+    if (opts.bands) {
+      ctx.fillStyle = style.getPropertyValue('--chart-band').trim() || 'rgba(140,180,255,0.08)';
+      for (const [a, b] of opts.bands) ctx.fillRect(px(a), pad.top, px(b) - px(a), h);
+    }
 
     ctx.font = '10px system-ui, sans-serif';
     ctx.lineWidth = 1;

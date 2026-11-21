@@ -1,6 +1,31 @@
 import type { Animal } from '../sim/animal';
 import { geneFraction, type Gene } from '../sim/genes';
 import { Tile } from '../sim/terrain';
+
+/** Cor da vegetação no meio de cada estação (primavera, verão, outono, inverno). */
+const SEASON_COLORS: [number, number, number][] = [
+  [66, 160, 62],
+  [58, 140, 48],
+  [148, 130, 50],
+  [104, 126, 100],
+];
+
+/** Cor da vegetação e intensidade da geada num ponto do ano (0–1). */
+export function seasonTint(phase: number, seasons: boolean): { r: number; g: number; b: number; frost: number } {
+  if (!seasons) {
+    const [r, g, b] = SEASON_COLORS[1];
+    return { r, g, b, frost: 0 };
+  }
+  // As cores de referência ficam no meio de cada estação; entre elas, mistura suave.
+  const x = phase * 4 - 0.5;
+  const k = ((Math.floor(x) % 4) + 4) % 4;
+  const t = x - Math.floor(x);
+  const s = t * t * (3 - 2 * t);
+  const a = SEASON_COLORS[k];
+  const b = SEASON_COLORS[(k + 1) % 4];
+  const frost = Math.max(0, -Math.cos(2 * Math.PI * (phase - 0.375)));
+  return { r: a[0] + (b[0] - a[0]) * s, g: a[1] + (b[1] - a[1]) * s, b: a[2] + (b[2] - a[2]) * s, frost };
+}
 import type { World } from '../sim/world';
 
 /**
@@ -180,18 +205,27 @@ export class Renderer {
   private paintGround(): void {
     const data = this.image.data;
     const base = this.baseColors;
-    const biomass = this.world.plants.biomass;
+    const { biomass } = this.world.plants;
+    const { tiles } = this.world.terrain;
+    const tint = seasonTint(this.world.climate.phase, this.world.settings.seasons);
+    // No inverno a terra fica coberta de geada.
+    const frost = tint.frost * 0.3;
     for (let i = 0; i < biomass.length; i++) {
       const p = biomass[i];
       let r = base[i * 3];
       let g = base[i * 3 + 1];
       let b = base[i * 3 + 2];
+      if (frost > 0 && tiles[i] !== Tile.Water) {
+        r += (215 - r) * frost;
+        g += (222 - g) * frost;
+        b += (228 - b) * frost;
+      }
       if (p > 0) {
-        // Mistura o solo com verde conforme a biomassa.
+        // Mistura o solo com a cor da vegetação conforme a biomassa.
         const t = 0.35 + p * 0.65;
-        r = r + (58 - p * 20 - r) * t;
-        g = g + (128 + p * 40 - g) * t;
-        b = b + (48 - b) * t;
+        r = r + (tint.r - p * 18 - r) * t;
+        g = g + (tint.g + p * 30 - 15 - g) * t;
+        b = b + (tint.b - b) * t;
       }
       const o = i * 4;
       data[o] = r;

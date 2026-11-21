@@ -79,6 +79,7 @@ body {
 
 :root {
   --chart-grid: #263024;
+  --chart-band: rgba(140, 180, 255, 0.09);
   --btn: #243022;
   --btn-hover: #2e3c2b;
 }
@@ -276,6 +277,11 @@ select {
   height: 0;
   border-top: 2px dashed;
   background: none;
+}
+
+.legend i.band {
+  height: 10px;
+  background: rgba(140, 180, 255, 0.25);
 }
 
 .legend .unit {

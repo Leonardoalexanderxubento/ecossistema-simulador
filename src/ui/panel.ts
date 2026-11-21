@@ -1,4 +1,5 @@
 import type { Animal } from '../sim/animal';
+import { SEASON_NAMES, winters, type Climate } from '../sim/climate';
 import { GENES, GENE_LABELS, type Gene } from '../sim/genes';
 import type { Species } from '../sim/species';
 import type { WorldSettings } from '../sim/world';
@@ -18,6 +19,7 @@ export interface AppControls {
   addAnimals(species: Species, n: number): void;
   readonly tick: number;
   readonly history: History;
+  readonly climate: Climate;
   stats(): PanelStats;
 }
 
@@ -115,6 +117,8 @@ export class Panel {
     this.bindRange('#p-growth', (v) => (app.settings.plants.growthRate = v));
     this.bindRange('#p-rate', (v) => (app.settings.mutation.rate = v));
     this.bindRange('#p-strength', (v) => (app.settings.mutation.strength = v));
+    const seasons = this.$('#p-seasons') as HTMLInputElement;
+    seasons.addEventListener('change', () => (app.settings.seasons = seasons.checked));
     const migration = this.$('#p-migration') as HTMLInputElement;
     migration.addEventListener('change', () => (app.settings.migration = migration.checked));
 
@@ -169,6 +173,8 @@ export class Panel {
     this.$('#s-foxes').textContent = String(s.foxes);
     this.$('#s-plants').textContent = `${Math.round(s.plantCover * 100)}%`;
     this.$('#s-time').textContent = timeLabel(this.app.tick);
+    const c = this.app.climate;
+    this.$('#s-season').textContent = this.app.settings.seasons ? `${SEASON_NAMES[c.season]} · ano ${c.year}` : 'desligadas';
     this.$('#s-gen').textContent = `${s.rabbitGeneration} / ${s.foxGeneration}`;
     this.$('#s-eaten').textContent = String(s.eaten);
     this.updateInspector();
@@ -214,6 +220,7 @@ export class Panel {
         },
       ],
       rightMax: 1,
+      bands: this.app.settings.seasons && x.length > 1 ? winters(x[0], x[x.length - 1]) : undefined,
       formatRightY: (v) => `${Math.round(v * 100)}%`,
     });
 
@@ -268,6 +275,7 @@ function template(app: AppControls): string {
     <div class="stat"><span class="dot fox"></span><span class="label">Raposas</span><strong id="s-foxes">0</strong></div>
     <div class="stat"><span class="dot plants"></span><span class="label">Vegetação</span><strong id="s-plants">0%</strong></div>
     <div class="stat"><span class="label">Tempo</span><strong id="s-time">0s</strong></div>
+    <div class="stat"><span class="label">Estação</span><strong id="s-season">Primavera</strong></div>
     <div class="stat"><span class="label">Geração coelho / raposa</span><strong id="s-gen">1 / 1</strong></div>
     <div class="stat"><span class="label">Coelhos caçados</span><strong id="s-eaten">0</strong></div>
   </section>
@@ -279,6 +287,7 @@ function template(app: AppControls): string {
       <span><i style="background:${COLORS.rabbit}"></i>Coelhos</span>
       <span><i style="background:${COLORS.fox}"></i>Raposas</span>
       <span><i class="dashed" style="border-color:${COLORS.plants}"></i>Vegetação (eixo direito)</span>
+      <span><i class="band"></i>Inverno</span>
     </div>
   </section>
 
@@ -320,6 +329,7 @@ function template(app: AppControls): string {
       <input id="p-strength" type="range" min="0" max="0.3" step="0.01" value="${settings.mutation.strength}" data-percent="1" />
       <output for="p-strength"></output>
     </div>
+    <label class="check"><input id="p-seasons" type="checkbox" ${settings.seasons ? 'checked' : ''} /> Estações do ano</label>
     <label class="check"><input id="p-migration" type="checkbox" ${settings.migration ? 'checked' : ''} /> Migração quando uma espécie some</label>
     <div class="row">
       <button id="add-rabbits" class="btn small">+10 coelhos</button>

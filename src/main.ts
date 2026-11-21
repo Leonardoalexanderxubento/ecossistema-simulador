@@ -42,6 +42,10 @@ class App implements AppControls {
     return this.world.tick;
   }
 
+  get climate() {
+    return this.world.climate;
+  }
+
   newWorld(seed: number = randomSeed()): void {
     this.seed = seed;
     this.world = new World({ cols: COLS, rows: ROWS, seed, ...INITIAL }, this.settings);
@@ -141,3 +145,6 @@ function seedFromUrl(): number | undefined {
 
 const app = new App(document.querySelector<HTMLCanvasElement>('#world')!, document.querySelector<HTMLElement>('#panel')!);
 requestAnimationFrame(app.frame);
+
+// Em desenvolvimento, expõe a aplicação no console para depurar (`app.world`).
+if (import.meta.env.DEV) Object.assign(window, { app });

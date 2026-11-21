@@ -42,7 +42,8 @@ export class Plants {
     }
   }
 
-  step(rng: Random, settings: PlantSettings): void {
+  /** Avança um tick; `season` multiplica o crescimento (estações do ano). */
+  step(rng: Random, settings: PlantSettings, season = 1): void {
     const { cols, rows, tiles, fertility } = this.terrain;
     const b = this.biomass;
     const out = this.next;
@@ -55,7 +56,7 @@ export class Plants {
           continue;
         }
         const current = b[i];
-        const f = fertility[i];
+        const f = fertility[i] * season;
         if (current > 0) {
           // Crescimento logístico: rápido no meio, devagar perto do máximo.
           out[i] = Math.min(1, current + settings.growthRate * f * (0.15 + current) * (1 - current));
