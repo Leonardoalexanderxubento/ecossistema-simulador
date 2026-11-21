@@ -1,13 +1,12 @@
 import type { Animal } from './animal';
-import { SPECIES } from './species';
+import { ROOTS } from './plants';
+import { SPECIES, isPrey } from './species';
 import type { World } from './world';
 
-/** Quanto de energia um coelho tira de 1.0 de biomassa. */
+/** Quanto de energia um herbívoro tira de 1.0 de biomassa. */
 const PLANT_NUTRITION = 15;
-/** Biomassa que um coelho consegue comer por tick. */
-const BITE = 0.06;
-/** Energia que uma raposa ganha ao comer um coelho de tamanho 1. */
-const RABBIT_MEAT = 65;
+/** Energia que uma raposa ganha ao comer uma presa de tamanho 1. */
+const MEAT: Record<string, number> = { rabbit: 65, deer: 80 };
 /** Distância (em células) de onde a raposa consegue dar o bote. */
 const POUNCE_DISTANCE = 1.4;
 /** Chance base de o bote dar certo (ajustada por tamanho e velocidade). */
@@ -47,7 +46,7 @@ export function updateFox(world: World, a: Animal): void {
   } else if ((courting = courtship(world, a)) >= 0) {
     moved = courting;
   } else if (hungry) {
-    const prey = world.index.rabbit.nearest(a.x, a.y, a.traits.vision);
+    const prey = nearestPrey(world, a);
     if (prey) {
       a.state = 'hunt';
       const dist = Math.hypot(prey.x - a.x, prey.y - a.y);
@@ -58,7 +57,7 @@ export function updateFox(world: World, a: Animal): void {
         a.rest = POUNCE_REST;
         if (world.rng.chance(POUNCE_CHANCE * bigger * faster)) {
           world.kill(prey, 'eaten');
-          a.energy = Math.min(cap, a.energy + RABBIT_MEAT * prey.traits.size);
+          a.energy = Math.min(cap, a.energy + MEAT[prey.species] * prey.traits.size);
         }
       } else {
         moved = moveToward(world, a, prey.x, prey.y, CHASE_EFFORT);
@@ -75,6 +74,17 @@ export function updateFox(world: World, a: Animal): void {
   a.energy -= metabolism(a, moved, world.climate.cold);
 }
 
+/** A presa mais próxima à vista: um coelho ou um filhote de cervo. */
+function nearestPrey(world: World, fox: Animal): Animal | null {
+  const r = fox.traits.vision;
+  const rabbit = world.index.rabbit.nearest(fox.x, fox.y, r);
+  const fawn = world.index.deer.nearest(fox.x, fox.y, r, isPrey);
+  if (!rabbit || !fawn) return rabbit ?? fawn;
+  const dr = (rabbit.x - fox.x) ** 2 + (rabbit.y - fox.y) ** 2;
+  const df = (fawn.x - fox.x) ** 2 + (fawn.y - fox.y) ** 2;
+  return dr <= df ? rabbit : fawn;
+}
+
 /** Gasto de energia do tick, que depende do corpo e de quanto se moveu. */
 export function metabolism(a: Animal, moved: number, cold = 1): number {
   const cfg = SPECIES[a.species];
@@ -86,19 +96,57 @@ export function metabolism(a: Animal, moved: number, cold = 1): number {
   return body + senses + motion;
 }
 
-export function updateRabbit(world: World, a: Animal): void {
-  const cfg = SPECIES.rabbit;
-  const { terrain, plants } = world;
+/**
+ * Como cada herbívoro pasta. Coelhos roem o capim até a raiz; cervos dão
+ * mordidas grandes, mas só onde o capim está alto. Assim, muitos coelhos
+ * deixam os cervos sem comida, e cervos abrem espaço para os coelhos.
+ */
+interface Grazing {
+  bite: number;
+  /** Abaixo dessa biomassa o capim não vale a pena. */
+  minBiomass: number;
+  /** Quanto capim fica na célula depois de comido. */
+  floor: number;
+  /** Se alcança as folhas dos arbustos. */
+  browses: boolean;
+}
+
+const GRAZING: Record<'rabbit' | 'deer', Grazing> = {
+  rabbit: { bite: 0.06, minBiomass: 0.05, floor: ROOTS, browses: false },
+  deer: { bite: 0.14, minBiomass: 0.35, floor: 0.2, browses: true },
+};
+
+/** Quanta comida útil a célula tem para esse herbívoro. */
+function foodAt(world: World, graze: Grazing, i: number): number {
+  const grass = world.plants.biomass[i];
+  const usable = grass > graze.minBiomass ? grass : 0;
+  return graze.browses ? Math.max(usable, world.plants.shrubs[i]) : usable;
+}
+
+/** Come o que houver na célula (arbustos primeiro, se alcançar) e devolve a biomassa comida. */
+function eatAt(world: World, graze: Grazing, i: number, amount: number): number {
+  const { plants } = world;
+  let eaten = graze.browses ? plants.browse(i, amount) : 0;
+  if (eaten < amount && plants.biomass[i] > graze.minBiomass) eaten += plants.eat(i, amount - eaten, graze.floor);
+  return eaten;
+}
+
+export function updateHerbivore(world: World, a: Animal): void {
+  const species = a.species as 'rabbit' | 'deer';
+  const cfg = SPECIES[species];
+  const graze = GRAZING[species];
+  const { terrain } = world;
   let moved = 0;
 
   const cap = maxEnergy(a);
   const hungry = a.energy < cap * cfg.hungerThreshold;
   const here = terrain.index(a.cellX, a.cellY);
 
-  // Perigo vem antes da fome: uma raposa à vista faz o coelho correr.
+  // Perigo vem antes de tudo: uma raposa à vista faz a presa correr.
+  // Cervos adultos são grandes demais para raposas e não fogem.
   let courting = -1;
   let drinking = -1;
-  const threat = world.index.fox.nearest(a.x, a.y, a.traits.vision * 0.6);
+  const threat = isPrey(a) ? world.index.fox.nearest(a.x, a.y, a.traits.vision * 0.6) : null;
   if (threat) {
     a.state = 'flee';
     a.targetX = -1;
@@ -108,15 +156,16 @@ export function updateRabbit(world: World, a: Animal): void {
     moved = drinking;
   } else if ((courting = courtship(world, a)) >= 0) {
     moved = courting;
-  } else if (hungry && plants.biomass[here] > 0.05) {
+  } else if (hungry && foodAt(world, graze, here) > 0.05) {
     // Parado comendo.
     a.state = 'food';
-    const eaten = plants.eat(here, BITE * a.traits.size);
+    const eaten = eatAt(world, graze, here, graze.bite * a.traits.size);
     a.energy = Math.min(cap, a.energy + eaten * PLANT_NUTRITION);
     a.targetX = -1;
   } else if (hungry) {
-    if (a.retarget <= 0 || a.targetX < 0 || plants.biomass[terrain.index(a.targetX, a.targetY)] <= 0.05) {
-      findPlant(world, a);
+    const target = a.targetX >= 0 ? foodAt(world, graze, terrain.index(a.targetX, a.targetY)) : 0;
+    if (a.retarget <= 0 || target <= 0.05) {
+      findPlant(world, a, graze);
       a.retarget = 20 + world.rng.int(0, 10);
     }
     if (a.targetX >= 0) {
@@ -229,8 +278,8 @@ function chooseMate(world: World, female: Animal): Animal | null {
 }
 
 /** Procura, dentro da visão, a célula com mais comida (pesada pela distância). */
-function findPlant(world: World, a: Animal): void {
-  const { terrain, plants } = world;
+function findPlant(world: World, a: Animal, graze: Grazing): void {
+  const { terrain } = world;
   const r = Math.ceil(a.traits.vision);
   const r2 = a.traits.vision * a.traits.vision;
   const cx = a.cellX;
@@ -246,7 +295,7 @@ function findPlant(world: World, a: Animal): void {
       const x = cx + dx;
       const y = cy + dy;
       if (!terrain.inBounds(x, y)) continue;
-      const b = plants.biomass[terrain.index(x, y)];
+      const b = foodAt(world, graze, terrain.index(x, y));
       if (b <= 0.1) continue;
       const score = b / (1 + Math.sqrt(d2) * 0.25);
       if (score > bestScore) {

@@ -1,6 +1,80 @@
 import type { Animal } from '../sim/animal';
 import { geneFraction, type Gene } from '../sim/genes';
+import { SPECIES, type Species } from '../sim/species';
 import { Tile } from '../sim/terrain';
+
+const BASE_COLORS: Record<Species, string> = { rabbit: '#f1e4c8', fox: '#e98a4a', deer: '#c39bff' };
+const SHADOW = 'rgba(0,0,0,0.35)';
+
+function drawRabbit(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
+  ctx.fillStyle = SHADOW;
+  ctx.beginPath();
+  ctx.ellipse(x + 0.8, y + 1.2, r, r * 0.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Raposa: triângulo apontando para onde ela vai. */
+function drawFox(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heading: number, color: string): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  const shape = (dx: number, dy: number) => {
+    ctx.beginPath();
+    ctx.moveTo(r + dx, dy);
+    ctx.lineTo(-r * 0.7 + dx, r * 0.75 + dy);
+    ctx.lineTo(-r * 0.7 + dx, -r * 0.75 + dy);
+    ctx.closePath();
+    ctx.fill();
+  };
+  ctx.fillStyle = SHADOW;
+  shape(1, 1.5);
+  ctx.fillStyle = color;
+  shape(0, 0);
+  ctx.restore();
+}
+
+/** Cervo: corpo alongado com cabeça; machos adultos têm galhada. */
+function drawDeer(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  heading: number,
+  color: string,
+  antlers: boolean,
+): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  ctx.fillStyle = SHADOW;
+  ctx.beginPath();
+  ctx.ellipse(1, 1.5, r, r * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(r * 0.95, 0, r * 0.38, 0, Math.PI * 2);
+  ctx.fill();
+  if (antlers) {
+    ctx.strokeStyle = '#efe2c6';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      ctx.moveTo(r * 1.05, side * r * 0.25);
+      ctx.lineTo(r * 1.45, side * r * 0.75);
+      ctx.moveTo(r * 1.25, side * r * 0.5);
+      ctx.lineTo(r * 1.6, side * r * 0.4);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 /** Cor da vegetação no meio de cada estação (primavera, verão, outono, inverno). */
 const SEASON_COLORS: [number, number, number][] = [
@@ -150,39 +224,11 @@ export class Renderer {
       if (!a.alive) continue;
       const px = a.x * s;
       const py = a.y * s;
-      const young = a.age < 240 ? 0.7 : 1;
-      if (a.species === 'rabbit') {
-        const r = 3 * a.traits.size * young;
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.beginPath();
-        ctx.ellipse(px + 0.8, py + 1.2, r, r * 0.7, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = this.animalColor(a);
-        ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Raposa: triângulo apontando para onde ela vai.
-        const r = 5.2 * a.traits.size * young;
-        const h = a.heading;
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(h);
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.beginPath();
-        ctx.moveTo(r + 1, 1.5);
-        ctx.lineTo(-r * 0.7 + 1, r * 0.75 + 1.5);
-        ctx.lineTo(-r * 0.7 + 1, -r * 0.75 + 1.5);
-        ctx.fill();
-        ctx.fillStyle = this.animalColor(a);
-        ctx.beginPath();
-        ctx.moveTo(r, 0);
-        ctx.lineTo(-r * 0.7, r * 0.75);
-        ctx.lineTo(-r * 0.7, -r * 0.75);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
+      const young = a.age < SPECIES[a.species].maturityAge * 0.8 ? 0.7 : 1;
+      const color = this.animalColor(a);
+      if (a.species === 'rabbit') drawRabbit(ctx, px, py, 3 * a.traits.size * young, color);
+      else if (a.species === 'fox') drawFox(ctx, px, py, 5.2 * a.traits.size * young, a.heading, color);
+      else drawDeer(ctx, px, py, 4.2 * a.traits.size * young, a.heading, color, young === 1 && a.sex === 'male');
     }
   }
 
@@ -192,20 +238,25 @@ export class Renderer {
    * ver a população mudando ao longo das gerações.
    */
   private animalColor(a: Animal): string {
-    if (this.colorBy === null) return a.species === 'rabbit' ? '#f1e4c8' : '#e98a4a';
+    if (this.colorBy === null) return BASE_COLORS[a.species];
     const t = Math.max(0, Math.min(1, geneFraction(a.species, this.colorBy, a.traits[this.colorBy])));
-    if (a.species === 'rabbit') {
-      // Creme (baixo) → ciano (alto).
-      return `hsl(${45 + t * 145} ${35 + t * 50}% ${88 - t * 18}%)`;
+    switch (a.species) {
+      case 'rabbit':
+        // Creme (baixo) → ciano (alto).
+        return `hsl(${45 + t * 145} ${35 + t * 50}% ${88 - t * 18}%)`;
+      case 'fox':
+        // Laranja-claro (baixo) → vermelho-escuro (alto).
+        return `hsl(${38 - t * 38} ${80 + t * 15}% ${62 - t * 22}%)`;
+      case 'deer':
+        // Lilás (baixo) → magenta (alto).
+        return `hsl(${265 + t * 55} ${55 + t * 30}% ${78 - t * 18}%)`;
     }
-    // Laranja-claro (baixo) → vermelho-escuro (alto).
-    return `hsl(${38 - t * 38} ${80 + t * 15}% ${62 - t * 22}%)`;
   }
 
   private paintGround(): void {
     const data = this.image.data;
     const base = this.baseColors;
-    const { biomass } = this.world.plants;
+    const { biomass, shrubs } = this.world.plants;
     const { tiles } = this.world.terrain;
     const tint = seasonTint(this.world.climate.phase, this.world.settings.seasons);
     // No inverno a terra fica coberta de geada.
@@ -226,6 +277,14 @@ export class Renderer {
         r = r + (tint.r - p * 18 - r) * t;
         g = g + (tint.g + p * 30 - 15 - g) * t;
         b = b + (tint.b - b) * t;
+      }
+      const sh = shrubs[i];
+      if (sh > 0.02) {
+        // Arbustos: verde-escuro, que perde as folhas no inverno.
+        const k = sh * 0.6;
+        r += (28 + 70 * tint.frost - r) * k;
+        g += (78 - g) * k;
+        b += (46 + 6 * tint.frost - b) * k;
       }
       const o = i * 4;
       data[o] = r;

@@ -1,7 +1,7 @@
 import type { Animal } from '../sim/animal';
 import { SEASON_NAMES, winters, type Climate } from '../sim/climate';
 import { GENES, GENE_LABELS, type Gene } from '../sim/genes';
-import type { Species } from '../sim/species';
+import { SPECIES_LIST, SPECIES_NAMES, type Species } from '../sim/species';
 import type { WorldSettings } from '../sim/world';
 import { LineChart, timeLabel } from './chart';
 import type { History } from './history';
@@ -24,11 +24,10 @@ export interface AppControls {
 }
 
 export interface PanelStats {
-  rabbits: number;
-  foxes: number;
+  counts: Record<Species, number>;
+  /** Geração mais avançada viva de cada espécie. */
+  generations: Record<Species, number>;
   plantCover: number;
-  rabbitGeneration: number;
-  foxGeneration: number;
   migrations: number;
   eaten: number;
   thirst: number;
@@ -39,8 +38,12 @@ const SPEEDS = [1, 2, 5, 10, 25];
 const COLORS = {
   rabbit: 'var(--rabbit)',
   fox: 'var(--fox)',
+  deer: 'var(--deer)',
   plants: 'var(--accent)',
 };
+
+/** Quantos animais cada botão "+" solta no mapa. */
+const ADD_AMOUNT: Record<Species, number> = { rabbit: 10, fox: 3, deer: 4 };
 
 /** Converte o valor bruto de um gene numa unidade legível. */
 export function formatGene(gene: Gene, value: number): string {
@@ -70,6 +73,7 @@ export class Panel {
     this.cssColors = {
       rabbit: css.getPropertyValue('--rabbit').trim(),
       fox: css.getPropertyValue('--fox').trim(),
+      deer: css.getPropertyValue('--deer').trim(),
       plants: css.getPropertyValue('--accent').trim(),
     };
     this.popChart = new LineChart(this.$('#chart-pop') as HTMLCanvasElement);
@@ -125,8 +129,9 @@ export class Panel {
     const migration = this.$('#p-migration') as HTMLInputElement;
     migration.addEventListener('change', () => (app.settings.migration = migration.checked));
 
-    this.$('#add-rabbits').addEventListener('click', () => app.addAnimals('rabbit', 10));
-    this.$('#add-foxes').addEventListener('click', () => app.addAnimals('fox', 3));
+    for (const species of SPECIES_LIST) {
+      this.$(`#add-${species}`).addEventListener('click', () => app.addAnimals(species, ADD_AMOUNT[species]));
+    }
 
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
@@ -172,13 +177,12 @@ export class Panel {
   /** Atualiza números e o inspetor (barato; chamado com frequência). */
   updateStats(): void {
     const s = this.app.stats();
-    this.$('#s-rabbits').textContent = String(s.rabbits);
-    this.$('#s-foxes').textContent = String(s.foxes);
+    for (const species of SPECIES_LIST) this.$(`#s-${species}`).textContent = String(s.counts[species]);
     this.$('#s-plants').textContent = `${Math.round(s.plantCover * 100)}%`;
     this.$('#s-time').textContent = timeLabel(this.app.tick);
     const c = this.app.climate;
     this.$('#s-season').textContent = this.app.settings.seasons ? `${SEASON_NAMES[c.season]} · ano ${c.year}` : 'desligadas';
-    this.$('#s-gen').textContent = `${s.rabbitGeneration} / ${s.foxGeneration}`;
+    this.$('#s-gen').textContent = SPECIES_LIST.map((sp) => s.generations[sp]).join(' / ');
     this.$('#s-eaten').textContent = String(s.eaten);
     this.$('#s-thirst').textContent = String(s.thirst);
     this.updateInspector();
@@ -191,7 +195,7 @@ export class Panel {
       box.innerHTML = '<p class="hint">Clique num animal no mapa para ver os genes dele.</p>';
       return;
     }
-    const name = a.species === 'rabbit' ? 'Coelho' : 'Raposa';
+    const name = SPECIES_NAMES[a.species].one;
     const status = a.alive ? stateLabel(a) : '<span class="dead">morreu</span>';
     box.innerHTML = `
       <div class="insp-head"><strong>${name} #${a.id}</strong><span>${status}</span></div>
@@ -214,8 +218,11 @@ export class Panel {
     this.popChart.draw({
       x,
       series: [
-        { label: 'Coelhos', color: c.rabbit, values: samples.map((s) => s.rabbits) },
-        { label: 'Raposas', color: c.fox, values: samples.map((s) => s.foxes) },
+        ...SPECIES_LIST.map((sp) => ({
+          label: SPECIES_NAMES[sp].many,
+          color: c[sp],
+          values: samples.map((s) => s.counts[sp]),
+        })),
         {
           label: 'Vegetação',
           color: c.plants,
@@ -233,10 +240,14 @@ export class Panel {
     const scale = g === 'speed' ? 30 : 1;
     this.geneChart.draw({
       x,
-      series: [
-        { label: 'Coelhos', color: c.rabbit, values: samples.map((s) => (s.rabbitTraits ? s.rabbitTraits[g] * scale : null)) },
-        { label: 'Raposas', color: c.fox, values: samples.map((s) => (s.foxTraits ? s.foxTraits[g] * scale : null)) },
-      ],
+      series: SPECIES_LIST.map((sp) => ({
+        label: SPECIES_NAMES[sp].many,
+        color: c[sp],
+        values: samples.map((s) => {
+          const t = s.traits[sp];
+          return t ? t[g] * scale : null;
+        }),
+      })),
     });
     this.$('#gene-unit').textContent = g === 'speed' ? 'células/s' : g === 'vision' ? 'células' : '× tamanho base';
   }
@@ -278,13 +289,14 @@ function template(app: AppControls): string {
   </section>
 
   <section class="card stats">
-    <div class="stat"><span class="dot rabbit"></span><span class="label">Coelhos</span><strong id="s-rabbits">0</strong></div>
-    <div class="stat"><span class="dot fox"></span><span class="label">Raposas</span><strong id="s-foxes">0</strong></div>
+    ${SPECIES_LIST.map(
+      (sp) => `<div class="stat"><span class="dot ${sp}"></span><span class="label">${SPECIES_NAMES[sp].many}</span><strong id="s-${sp}">0</strong></div>`,
+    ).join('')}
     <div class="stat"><span class="dot plants"></span><span class="label">Vegetação</span><strong id="s-plants">0%</strong></div>
     <div class="stat"><span class="label">Tempo</span><strong id="s-time">0s</strong></div>
     <div class="stat"><span class="label">Estação</span><strong id="s-season">Primavera</strong></div>
-    <div class="stat"><span class="label">Geração coelho / raposa</span><strong id="s-gen">1 / 1</strong></div>
-    <div class="stat"><span class="label">Coelhos caçados</span><strong id="s-eaten">0</strong></div>
+    <div class="stat"><span class="label">Geração coelho / raposa / cervo</span><strong id="s-gen">1 / 1 / 1</strong></div>
+    <div class="stat"><span class="label">Presas caçadas</span><strong id="s-eaten">0</strong></div>
     <div class="stat"><span class="label">Mortes de sede</span><strong id="s-thirst">0</strong></div>
   </section>
 
@@ -292,8 +304,7 @@ function template(app: AppControls): string {
     <h2>Populações</h2>
     <canvas id="chart-pop" class="chart"></canvas>
     <div class="legend">
-      <span><i style="background:${COLORS.rabbit}"></i>Coelhos</span>
-      <span><i style="background:${COLORS.fox}"></i>Raposas</span>
+      ${SPECIES_LIST.map((sp) => `<span><i style="background:${COLORS[sp]}"></i>${SPECIES_NAMES[sp].many}</span>`).join('')}
       <span><i class="dashed" style="border-color:${COLORS.plants}"></i>Vegetação (eixo direito)</span>
       <span><i class="band"></i>Inverno</span>
     </div>
@@ -308,8 +319,7 @@ function template(app: AppControls): string {
     </div>
     <canvas id="chart-gene" class="chart"></canvas>
     <div class="legend">
-      <span><i style="background:${COLORS.rabbit}"></i>Média dos coelhos</span>
-      <span><i style="background:${COLORS.fox}"></i>Média das raposas</span>
+      ${SPECIES_LIST.map((sp) => `<span><i style="background:${COLORS[sp]}"></i>${SPECIES_NAMES[sp].many}</span>`).join('')}
       <span class="unit" id="gene-unit"></span>
     </div>
     <label class="check"><input id="colorize" type="checkbox" ${app.colorAnimals ? 'checked' : ''} /> Colorir animais por esse gene</label>
@@ -341,8 +351,9 @@ function template(app: AppControls): string {
     <label class="check"><input id="p-thirst" type="checkbox" ${settings.thirst ? 'checked' : ''} /> Sede (animais bebem nos lagos)</label>
     <label class="check"><input id="p-migration" type="checkbox" ${settings.migration ? 'checked' : ''} /> Migração quando uma espécie some</label>
     <div class="row">
-      <button id="add-rabbits" class="btn small">+10 coelhos</button>
-      <button id="add-foxes" class="btn small">+3 raposas</button>
+      ${SPECIES_LIST.map(
+        (sp) => `<button id="add-${sp}" class="btn small">+${ADD_AMOUNT[sp]} ${SPECIES_NAMES[sp].many.toLowerCase()}</button>`,
+      ).join('')}
     </div>
   </details>`;
 }

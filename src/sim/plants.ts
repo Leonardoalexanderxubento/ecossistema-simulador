@@ -13,6 +13,9 @@ export interface PlantSettings {
 /** Biomassa mínima que sobra depois de comida: as raízes rebrotam. */
 export const ROOTS = 0.02;
 
+/** Velocidade com que as folhas dos arbustos rebrotam. */
+const SHRUB_GROWTH = 0.001;
+
 export const defaultPlantSettings: PlantSettings = {
   growthRate: 0.004,
   spreadChance: 0.02,
@@ -26,6 +29,13 @@ export const defaultPlantSettings: PlantSettings = {
  */
 export class Plants {
   readonly biomass: Float32Array;
+  /**
+   * Folhas de arbustos (0–1), que só crescem em solo bem fértil. Ficam
+   * altas demais para os coelhos: são o alimento exclusivo dos cervos.
+   */
+  readonly shrubs: Float32Array;
+  /** Quanto de arbusto cada célula comporta. */
+  readonly shrubCapacity: Float32Array;
   private readonly next: Float32Array;
 
   constructor(
@@ -35,10 +45,14 @@ export class Plants {
   ) {
     this.biomass = new Float32Array(terrain.cols * terrain.rows);
     this.next = new Float32Array(this.biomass.length);
+    this.shrubs = new Float32Array(this.biomass.length);
+    this.shrubCapacity = new Float32Array(this.biomass.length);
     for (let i = 0; i < this.biomass.length; i++) {
-      if (terrain.tiles[i] === Tile.Grass && rng.chance(initialCover * terrain.fertility[i])) {
-        this.biomass[i] = rng.range(0.3, 1);
-      }
+      if (terrain.tiles[i] !== Tile.Grass) continue;
+      if (rng.chance(initialCover * terrain.fertility[i])) this.biomass[i] = rng.range(0.3, 1);
+      const cap = Math.min(1, Math.max(0, (terrain.fertility[i] - 0.55) * 2.5));
+      this.shrubCapacity[i] = cap;
+      this.shrubs[i] = cap * rng.range(0.5, 1);
     }
   }
 
@@ -69,11 +83,30 @@ export class Plants {
       }
     }
     b.set(out);
+
+    // Arbustos rebrotam devagar até a capacidade da célula.
+    const shrubs = this.shrubs;
+    const cap = this.shrubCapacity;
+    const g = SHRUB_GROWTH * season;
+    for (let i = 0; i < shrubs.length; i++) {
+      if (cap[i] > 0 && shrubs[i] < cap[i]) shrubs[i] += g * (cap[i] - shrubs[i] + 0.05);
+      if (shrubs[i] > cap[i]) shrubs[i] = cap[i];
+    }
   }
 
-  /** Retira até `amount` de biomassa da célula e devolve quanto foi comido. */
-  eat(index: number, amount: number): number {
-    const available = this.biomass[index] - ROOTS;
+  /** Come folhas de arbusto; devolve quanto foi comido. */
+  browse(index: number, amount: number): number {
+    const eaten = Math.min(this.shrubs[index], amount);
+    this.shrubs[index] -= eaten;
+    return eaten;
+  }
+
+  /**
+   * Retira até `amount` de biomassa da célula e devolve quanto foi comido.
+   * `floor` é o mínimo que fica (bocas grandes não alcançam o capim rente).
+   */
+  eat(index: number, amount: number, floor = ROOTS): number {
+    const available = this.biomass[index] - floor;
     if (available <= 0) return 0;
     const eaten = Math.min(available, amount);
     this.biomass[index] -= eaten;

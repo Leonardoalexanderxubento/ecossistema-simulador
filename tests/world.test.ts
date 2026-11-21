@@ -37,7 +37,9 @@ describe('World', () => {
   });
 
   it('a vida continua: nascem filhotes e novas gerações aparecem', () => {
-    const world = run(11, 3000);
+    // Sem predadores, para o teste não depender dos ciclos de caça.
+    const world = new World({ ...options, seed: 11, foxes: 0 });
+    for (let i = 0; i < 3000; i++) world.step();
     expect(world.bornTotal.rabbit).toBeGreaterThan(0);
     expect(world.stats('rabbit').maxGeneration).toBeGreaterThan(1);
   });
@@ -94,5 +96,27 @@ describe('World', () => {
     expect(alive.length).toBeGreaterThan(0);
     expect(world.deaths.rabbit.thirst).toBe(0);
     expect(alive.some((a) => a.hydration > 0.9)).toBe(true);
+  });
+
+  it('cervos comem arbustos que coelhos não alcançam', () => {
+    const shrubsAfter = (rabbits: number, deer: number) => {
+      const world = new World({ ...options, seed: 4, rabbits, foxes: 0, deer });
+      for (let i = 0; i < 600; i++) world.step();
+      return world.plants.shrubs.reduce((n, v) => n + v, 0);
+    };
+    const untouched = shrubsAfter(0, 0);
+    expect(shrubsAfter(0, 20)).toBeLessThan(untouched);
+    expect(shrubsAfter(40, 0)).toBeCloseTo(untouched, 6);
+  });
+
+  it('raposas só caçam filhotes de cervo, não adultos', () => {
+    const world = new World({ ...options, seed: 6, rabbits: 0, foxes: 10, deer: 20 }, { ...defaultSettings(), migration: false });
+    for (const a of world.animals) if (a.species === 'deer') a.age = 2000;
+    for (let i = 0; i < 1500; i++) world.step();
+    // Todo cervo caçado nasceu durante o teste (filhote).
+    const adultsLeft = world.animals.filter((a) => a.species === 'deer' && a.alive && a.generation === 1).length;
+    const adultsDead = 20 - adultsLeft;
+    expect(world.deaths.deer.eaten).toBeLessThanOrEqual(world.bornTotal.deer);
+    expect(adultsDead).toBeLessThanOrEqual(world.deaths.deer.starved + world.deaths.deer.thirst + world.deaths.deer.old);
   });
 });

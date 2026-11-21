@@ -7,6 +7,7 @@
   --accent: #9bd36a;
   --rabbit: #f1e4c8;
   --fox: #ff8a3d;
+  --deer: #c39bff;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -244,6 +245,10 @@ select {
 
 .dot.fox {
   background: var(--fox);
+}
+
+.dot.deer {
+  background: var(--deer);
 }
 
 .dot.plants {

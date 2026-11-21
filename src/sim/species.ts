@@ -1,4 +1,4 @@
-export type Species = 'rabbit' | 'fox';
+export type Species = 'rabbit' | 'fox' | 'deer';
 
 /** Parâmetros fixos de cada espécie (o que os genes não controlam). */
 export interface SpeciesConfig {
@@ -57,6 +57,32 @@ export const SPECIES: Record<Species, SpeciesConfig> = {
     thirstRate: 1 / 2000,
     thirstThreshold: 0.35,
   },
+  deer: {
+    baseMetabolism: 0.26,
+    moveCost: 3,
+    maxEnergy: 260,
+    reproduceAt: 180,
+    energyPerChild: 70,
+    litter: [1, 2],
+    reproduceCooldown: 1500,
+    maturityAge: 900,
+    maxAge: 7200,
+    hungerThreshold: 0.8,
+    mateRange: 3,
+    thirstRate: 1 / 1500,
+    thirstThreshold: 0.4,
+  },
 };
+
+export const SPECIES_NAMES: Record<Species, { one: string; many: string }> = {
+  rabbit: { one: 'Coelho', many: 'Coelhos' },
+  fox: { one: 'Raposa', many: 'Raposas' },
+  deer: { one: 'Cervo', many: 'Cervos' },
+};
+
+/** Filhotes de cervo ainda são pequenos o bastante para as raposas. */
+export function isPrey(a: { species: Species; age: number }): boolean {
+  return a.species === 'rabbit' || (a.species === 'deer' && a.age < SPECIES.deer.maturityAge);
+}
 
 export const SPECIES_LIST = Object.keys(SPECIES) as Species[];

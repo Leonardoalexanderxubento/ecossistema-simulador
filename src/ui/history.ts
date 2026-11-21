@@ -1,14 +1,15 @@
 import type { Traits } from '../sim/animal';
+import { SPECIES_LIST, type Species } from '../sim/species';
 import type { World } from '../sim/world';
 
 export interface Sample {
   tick: number;
-  rabbits: number;
-  foxes: number;
+  /** Tamanho de cada população. */
+  counts: Record<Species, number>;
   /** Fração das células de grama cobertas de vegetação (0–1). */
   plants: number;
-  rabbitTraits: Traits | null;
-  foxTraits: Traits | null;
+  /** Média dos genes de cada espécie (`null` se ela estava extinta). */
+  traits: Record<Species, Traits | null>;
 }
 
 /**
@@ -29,15 +30,18 @@ export class History {
 
   record(world: World, grassCells: number): void {
     if (world.tick % this.interval !== 0) return;
-    const r = world.stats('rabbit');
-    const f = world.stats('fox');
+    const counts = {} as Record<Species, number>;
+    const traits = {} as Record<Species, Traits | null>;
+    for (const species of SPECIES_LIST) {
+      const s = world.stats(species);
+      counts[species] = s.count;
+      traits[species] = s.count > 0 ? s.traits : null;
+    }
     this.samples.push({
       tick: world.tick,
-      rabbits: r.count,
-      foxes: f.count,
+      counts,
       plants: grassCells > 0 ? world.plants.total() / grassCells : 0,
-      rabbitTraits: r.count > 0 ? r.traits : null,
-      foxTraits: f.count > 0 ? f.traits : null,
+      traits,
     });
     if (this.samples.length > this.maxSamples) {
       this.samples = this.samples.filter((_, i) => i % 2 === 0);

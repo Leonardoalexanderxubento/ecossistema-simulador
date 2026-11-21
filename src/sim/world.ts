@@ -1,6 +1,6 @@
 import { Animal, type Traits } from './animal';
 import { climateAt, type Climate } from './climate';
-import { maxEnergy, releasePartner, updateFox, updateRabbit } from './behavior';
+import { maxEnergy, releasePartner, updateFox, updateHerbivore } from './behavior';
 import { GENES, crossover, defaultMutation, founderTraits, type MutationSettings } from './genes';
 import { Plants, defaultPlantSettings, type PlantSettings } from './plants';
 import { Random } from './random';
@@ -14,6 +14,7 @@ export interface WorldOptions {
   seed: number;
   rabbits: number;
   foxes: number;
+  deer?: number;
 }
 
 export type DeathCause = 'starved' | 'old' | 'eaten' | 'thirst';
@@ -35,8 +36,8 @@ export function defaultSettings(): WorldSettings {
 
 /** A cada quantos ticks a migração é verificada, e abaixo de quantos animais. */
 const MIGRATION_INTERVAL = 900;
-const MIGRATION_THRESHOLD: Record<Species, number> = { rabbit: 6, fox: 3 };
-const MIGRANTS: Record<Species, number> = { rabbit: 8, fox: 4 };
+const MIGRATION_THRESHOLD: Record<Species, number> = { rabbit: 6, fox: 3, deer: 3 };
+const MIGRANTS: Record<Species, number> = { rabbit: 8, fox: 4, deer: 4 };
 
 export interface PopulationStats {
   count: number;
@@ -57,8 +58,9 @@ export class World {
   readonly deaths: Record<Species, Record<DeathCause, number>> = {
     rabbit: { starved: 0, old: 0, eaten: 0, thirst: 0 },
     fox: { starved: 0, old: 0, eaten: 0, thirst: 0 },
+    deer: { starved: 0, old: 0, eaten: 0, thirst: 0 },
   };
-  readonly bornTotal: Record<Species, number> = { rabbit: 0, fox: 0 };
+  readonly bornTotal: Record<Species, number> = { rabbit: 0, fox: 0, deer: 0 };
   migrations = 0;
   /** Média dos genes da última população com tamanho razoável (usada por migrantes). */
   private lastKnownTraits: Partial<Record<Species, Traits>> = {};
@@ -68,6 +70,8 @@ export class World {
   /** Mapas sem lagos desligam a sede (ninguém teria onde beber). */
   private readonly hasWater: boolean;
   private births: Animal[] = [];
+  /** Espécies que já tiveram algum animal neste mundo. */
+  private readonly native = new Set<Species>();
 
   constructor(readonly options: WorldOptions, settings: WorldSettings = defaultSettings()) {
     this.rng = new Random(options.seed);
@@ -79,10 +83,12 @@ export class World {
     this.index = {
       rabbit: new SpatialHash(options.cols, options.rows),
       fox: new SpatialHash(options.cols, options.rows),
+      deer: new SpatialHash(options.cols, options.rows),
     };
 
     for (let i = 0; i < options.rabbits; i++) this.spawnRandom('rabbit');
     for (let i = 0; i < options.foxes; i++) this.spawnRandom('fox');
+    for (let i = 0; i < (options.deer ?? 0); i++) this.spawnRandom('deer');
   }
 
   /** Cria um animal numa célula de grama aleatória. */
@@ -98,6 +104,7 @@ export class World {
       animal.hydration = this.rng.range(0.6, 1);
       animal.age = this.rng.int(0, cfg.maturityAge * 2);
       this.animals.push(animal);
+      this.native.add(species);
       return animal;
     }
     return null;
@@ -112,8 +119,8 @@ export class World {
 
     for (const a of this.animals) {
       if (!a.alive) continue;
-      if (a.species === 'rabbit') updateRabbit(this, a);
-      else updateFox(this, a);
+      if (a.species === 'fox') updateFox(this, a);
+      else updateHerbivore(this, a);
       this.age(a);
     }
 
@@ -141,6 +148,8 @@ export class World {
    */
   private migrate(): void {
     for (const species of SPECIES_LIST) {
+      // Só voltam espécies que já viveram neste mundo.
+      if (!this.native.has(species)) continue;
       // Também chegam migrantes se sobrou só um sexo: a espécie não teria futuro.
       const s = this.sexes(species);
       if (s.male + s.female >= MIGRATION_THRESHOLD[species] && s.male > 0 && s.female > 0) continue;

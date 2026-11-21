@@ -1,19 +1,18 @@
 import './style.css';
+import { INITIAL_POPULATION, WORLD_SIZE } from './config';
 import { Renderer } from './render/renderer';
 import type { Animal } from './sim/animal';
 import type { Gene } from './sim/genes';
 import { randomSeed } from './sim/random';
-import type { Species } from './sim/species';
+import { SPECIES_LIST, type Species } from './sim/species';
 import { Tile } from './sim/terrain';
 import { World, defaultSettings, type WorldSettings } from './sim/world';
 import { History } from './ui/history';
 import { Panel, type AppControls, type PanelStats } from './ui/panel';
 
-const COLS = 160;
-const ROWS = 100;
+const { cols: COLS, rows: ROWS } = WORLD_SIZE;
 const CELL = 6;
 const TICKS_PER_SECOND = 30;
-const INITIAL = { rabbits: 120, foxes: 14 };
 /** Tempo máximo de simulação por quadro, para a tela nunca travar. */
 const FRAME_BUDGET_MS = 28;
 
@@ -48,7 +47,7 @@ class App implements AppControls {
 
   newWorld(seed: number = randomSeed()): void {
     this.seed = seed;
-    this.world = new World({ cols: COLS, rows: ROWS, seed, ...INITIAL }, this.settings);
+    this.world = new World({ cols: COLS, rows: ROWS, seed, ...INITIAL_POPULATION }, this.settings);
     this.renderer = new Renderer(this.canvas, this.world, CELL);
     this.history = new History();
     this.selected = null;
@@ -71,17 +70,20 @@ class App implements AppControls {
 
   stats(): PanelStats {
     const w = this.world;
-    const r = w.stats('rabbit');
-    const f = w.stats('fox');
+    const counts = {} as Record<Species, number>;
+    const generations = {} as Record<Species, number>;
+    for (const species of SPECIES_LIST) {
+      const s = w.stats(species);
+      counts[species] = s.count;
+      generations[species] = s.maxGeneration;
+    }
     return {
-      rabbits: r.count,
-      foxes: f.count,
+      counts,
+      generations,
       plantCover: this.grassCells > 0 ? w.plants.total() / this.grassCells : 0,
-      rabbitGeneration: r.maxGeneration,
-      foxGeneration: f.maxGeneration,
       migrations: w.migrations,
-      eaten: w.deaths.rabbit.eaten,
-      thirst: w.deaths.rabbit.thirst + w.deaths.fox.thirst,
+      eaten: w.deaths.rabbit.eaten + w.deaths.deer.eaten,
+      thirst: SPECIES_LIST.reduce((n, sp) => n + w.deaths[sp].thirst, 0),
     };
   }
 
