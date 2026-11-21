@@ -1,12 +1,12 @@
 # 🌿 Simulador de Ecossistema
 
-**Plantas, coelhos, cervos e raposas evoluindo por seleção natural, em tempo real, no navegador.**
+**Plantas, coelhos, cervos, raposas e lobos evoluindo por seleção natural, em tempo real, no navegador.**
 
 Cada animal nasce macho ou fêmea, com genes de **velocidade**, **visão** e **tamanho** herdados do pai e da mãe, com pequenas mutações. Ninguém programou qual é o "melhor" animal: quem come, bebe, foge, encontra parceiro e se reproduz melhor deixa mais filhotes, e a população muda sozinha ao longo das gerações e das estações do ano.
 
 ▶️ **[Abrir o simulador](https://leonardoalexanderxubento.github.io/ecossistema-simulador/)**
 
-![Simulador em execução: mapa com lagos, capim e arbustos, coelhos, cervos e raposas, e gráficos de população com os invernos destacados](docs/screenshot.jpg)
+![Simulador em execução: mapa com lagos, capim e arbustos, coelhos, cervos, raposas e lobos, e gráficos de população com os invernos destacados](docs/screenshot.jpg)
 
 ## O que observar
 
@@ -16,6 +16,9 @@ Cada animal nasce macho ou fêmea, com genes de **velocidade**, **visão** e **t
 - **O ritmo das estações.** Os coelhos se multiplicam na primavera e no verão e despencam no outono e no inverno, quando o capim quase para de crescer e o frio custa energia. No gráfico de populações, os invernos aparecem em azul.
 - **Cada um no seu nicho.** Coelhos e cervos disputam o capim, mas só os cervos alcançam as folhas dos arbustos. Sem esse recurso exclusivo, uma espécie sempre acabava eliminando a outra (o [princípio da exclusão competitiva](https://pt.wikipedia.org/wiki/Princ%C3%ADpio_da_exclus%C3%A3o_competitiva)).
 - **Emboscada na beira d'água.** Todos precisam beber, e as margens dos lagos viram pontos de encontro, e de caça.
+- **Alcateias.** Lobos andam juntos, e cada lobo por perto aumenta a chance do bote. Um cervo adulto é demais para um lobo sozinho, mas alimenta o bando inteiro por um bom tempo.
+- **Troca de presa.** Lobos vão atrás da presa que encontram primeiro, então caçam mais a espécie abundante e aliviam a que está ficando rara. Isso amortece os ciclos.
+- **Esconderijos.** Coelhos e filhotes dentro de moitas densas somem da vista dos predadores. Quando os cervos comem os arbustos, abrem o mato e deixam os coelhos mais expostos.
 - **Seleção sexual.** As fêmeas preferem machos grandes e bem alimentados. Em mundos sem muitos predadores, isso pode empurrar o tamanho médio para cima mesmo quando ser grande custa caro.
 
 Dica: use a velocidade **10×** ou **25×**, escolha _Velocidade_ no gráfico de genes e deixe rodar alguns minutos.
@@ -28,12 +31,14 @@ Dica: use a velocidade **10×** ou **25×**, escolha _Velocidade_ no gráfico de
 | **Capim** | Cada célula tem uma biomassa (0–1) que cresce de forma logística e coloniza vizinhas. As raízes rebrotam depois de comidas. |
 | **Arbustos** | Crescem devagar só em solo muito fértil (as manchas verde-escuras) e perdem as folhas no inverno. Só os cervos alcançam. |
 | **Coelhos** | Procuram a célula com mais comida dentro da visão, roem o capim até a raiz e fogem quando avistam uma raposa. |
-| **Cervos** | Grandes, lentos para se reproduzir e de vida longa. Comem folhas de arbusto e capim alto. Os adultos não temem raposas; os filhotes fogem. |
-| **Raposas** | Quando têm fome, perseguem o coelho ou filhote de cervo mais próximo e dão um bote que pode falhar, seguido de um descanso. |
-| **Energia** | Tudo custa energia: existir (∝ tamanho^0,75, mais no frio), enxergar (∝ visão) e se mover (∝ velocidade² × tamanho). Energia zerada é morte por fome. |
+| **Cervos** | Grandes, lentos para se reproduzir e de vida longa. Comem folhas de arbusto e capim alto. Fogem de lobos; dos filhotes recém-nascidos, as raposas também dão conta. Com a área superlotada, as fêmeas deixam de procriar. |
+| **Raposas** | Caçadoras solitárias de coelhos e cervos recém-nascidos. Espreitam devagar e disparam quando a presa foge; o bote pode falhar. Saciadas, descansam e digerem. Sem presa à vista, fuçam atrás de roedores, insetos e frutos, o que as segura nas épocas magras. |
+| **Lobos** | Caçam em bando cervos de qualquer idade e, quando cruzam com eles, coelhos. A carne é dividida entre os lobos que participaram, e quanto maior a refeição, mais longa a digestão. Fora da caça, procuram ficar perto do bando. |
+| **Território** | Raposas e lobos são territoriais: com vizinhos demais da mesma espécie por perto, a fêmea não cria filhotes. Isso evita explosões de predadores. |
+| **Energia** | Tudo custa energia: existir (∝ tamanho^0,75, mais no frio e menos descansando), enxergar (∝ visão) e se mover (∝ velocidade² × tamanho). Energia zerada é morte por fome. |
 | **Água** | A reserva de água cai com o tempo, mais rápido no calor. Com sede, o animal vai até a margem mais próxima (pré-calculada com uma busca em largura) e bebe até se saciar. Água zerada é morte por sede. |
 | **Estações** | Um ano dura 2 min 40 s em 1×. O crescimento das plantas, o frio e o calor seguem curvas suaves ao longo do ano. |
-| **Reprodução** | Sexuada. A fêmea adulta e bem alimentada procura machos por perto e escolhe o maior e mais bem alimentado; o casal caminha um até o outro e nasce a ninhada. Cada filhote recebe cada gene da mãe ou do pai, com mutações. A mãe paga quase toda a energia. |
+| **Reprodução** | Sexuada. A fêmea adulta e bem alimentada procura machos por perto e escolhe o maior e mais bem alimentado; o casal caminha um até o outro e nasce a ninhada. Cada filhote recebe cada gene da mãe ou do pai, com mutações. A mãe paga quase toda a energia, mas sempre guarda 30% da reserva para sobreviver ao parto. |
 | **Migração** | Se uma espécie quase desaparece, ou sobra só um sexo, alguns migrantes chegam parecidos com a última população conhecida. Dá para desligar. |
 
 ### Compromissos evolutivos
@@ -67,7 +72,8 @@ npm run dev
 | `npm run dev` | Servidor de desenvolvimento com recarga automática |
 | `npm run build` | Checagem de tipos e build de produção em `dist/` |
 | `npm test` | Testes automatizados (Vitest) |
-| `npm run sim -- 20000 42` | Roda 20.000 ticks sem interface com a semente 42 e imprime populações e genes médios; útil para ajustar o equilíbrio |
+| `npm run sim -- 20000 42` | Roda 20.000 ticks sem interface com a semente 42 e imprime populações e genes médios |
+| `npm run balance` | Roda várias sementes em sequência e resume, para cada espécie, a mediana e a faixa da população e quantas vezes ela quase sumiu; é o que uso para ajustar o equilíbrio |
 
 ## Estrutura
 
@@ -89,8 +95,8 @@ src/
 ├── ui/             # Painel, gráficos e histórico
 ├── config.ts       # Tamanho do mapa e populações iniciais
 └── main.ts         # Liga tudo: laço com passo fixo, cliques, URL
-tests/              # Testes de genética, clima e do mundo
-scripts/headless.ts # Simulação sem interface
+tests/              # Testes de genética, clima, predadores e do mundo
+scripts/            # Simulação sem interface e resumo do equilíbrio
 ```
 
 A simulação não depende do navegador, então pode ser testada e rodada no terminal. A aleatoriedade vem de um gerador com semente, o que torna cada execução reproduzível.
@@ -101,7 +107,6 @@ TypeScript (modo estrito) · Vite · Canvas 2D · Vitest · GitHub Actions + Git
 
 ## Ideias para o futuro
 
-- Lobos, um predador capaz de caçar cervos adultos
 - Ferramenta de pincel para desenhar lagos e barreiras (e ver populações separadas evoluírem diferente)
 - Exportar o histórico em CSV
 - Árvore genealógica do animal selecionado
