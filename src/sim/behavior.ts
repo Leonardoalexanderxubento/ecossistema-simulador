@@ -1,17 +1,15 @@
 import type { Animal } from './animal';
 import { ROOTS } from './plants';
-import { SPECIES, isPrey } from './species';
+import { PREDATORS, PREY, SPECIES, canHunt, type Predator } from './species';
 import type { World } from './world';
 
 /** Quanto de energia um herbívoro tira de 1.0 de biomassa. */
 const PLANT_NUTRITION = 15;
-/** Energia que uma raposa ganha ao comer uma presa de tamanho 1. */
-const MEAT: Record<string, number> = { rabbit: 85, deer: 100 };
-/** Distância (em células) de onde a raposa consegue dar o bote. */
+/** Energia de uma presa adulta de tamanho 1 (filhotes rendem 40%). */
+const MEAT: Record<string, number> = { rabbit: 85, deer: 250 };
+/** Distância (em células) de onde o predador consegue dar o bote. */
 const POUNCE_DISTANCE = 1.4;
-/** Chance base de o bote dar certo (ajustada por tamanho e velocidade). */
-const POUNCE_CHANCE = 0.36;
-/** Ticks que a raposa precisa descansar depois de um bote. */
+/** Ticks de descanso depois de um bote que falhou. */
 const POUNCE_REST = 18;
 /** Multiplicador de velocidade em fuga ou perseguição (custa mais energia). */
 const FLEE_EFFORT = 1.25;
@@ -19,10 +17,6 @@ const FLEE_EFFORT = 1.25;
 const STALK_EFFORT = 0.75;
 const SPRINT_EFFORT = 1.6;
 const SPRINT_DISTANCE = 4;
-/** Energia por tick que uma raposa tira de comida miúda (roedores, insetos, frutos). */
-const FORAGE = 0.1;
-/** Ticks digerindo depois de comer: um predador saciado não caça. */
-const DIGEST_REST = 90;
 /** Água recuperada por tick bebendo na margem. */
 const DRINK_RATE = 0.06;
 /** Distância em que o casal consegue acasalar. */
@@ -37,19 +31,48 @@ export function maxEnergy(a: Animal): number {
   return SPECIES[a.species].maxEnergy * a.traits.size;
 }
 
-export function updateFox(world: World, a: Animal): void {
-  const cfg = SPECIES.fox;
+/** Como cada predador caça. */
+interface Hunting {
+  /** Chance base do bote (ajustada por tamanho, velocidade e bando). */
+  chance: number;
+  /** Ticks digerindo depois de comer: um predador saciado não caça. */
+  digest: number;
+  /** Energia por tick de comida miúda quando não há presa à vista. */
+  forage: number;
+  /** Caça em bando e divide a presa. */
+  pack: boolean;
+}
+
+const HUNTING: Record<Predator, Hunting> = {
+  fox: { chance: 0.2, digest: 90, forage: 0.1, pack: false },
+  wolf: { chance: 0.14, digest: 600, forage: 0.02, pack: true },
+};
+
+/** Distância em que outros lobos ajudam no bote e dividem a presa. */
+const PACK_RADIUS = 6;
+/** Quanto cada lobo a mais aumenta a chance do bote. */
+const PACK_BONUS = 0.7;
+/** Lobos fora da caça procuram ficar a essa distância do bando. */
+const PACK_SPACING = 5;
+
+export function updatePredator(world: World, a: Animal): void {
+  const species = a.species as Predator;
+  const cfg = SPECIES[species];
+  const hunting = HUNTING[species];
   let moved = 0;
   const cap = maxEnergy(a);
   const hungry = a.energy < cap * cfg.hungerThreshold;
 
   let courting = -1;
   let drinking = -1;
-  if (a.rest > 0) {
-    // Recuperando o fôlego depois de um bote.
-    a.rest--;
-  } else if ((drinking = seekWater(world, a)) >= 0) {
+  const resting = a.rest > 0;
+  if ((drinking = seekWater(world, a)) >= 0) {
+    // A sede interrompe até a digestão.
     moved = drinking;
+    if (a.rest > 0) a.rest--;
+  } else if (resting) {
+    // Recuperando o fôlego depois de um bote, ou digerindo.
+    a.rest--;
   } else if ((courting = courtship(world, a)) >= 0) {
     moved = courting;
   } else if (hungry) {
@@ -57,33 +80,66 @@ export function updateFox(world: World, a: Animal): void {
     if (prey) {
       a.state = 'hunt';
       const dist = Math.hypot(prey.x - a.x, prey.y - a.y);
-      if (dist <= POUNCE_DISTANCE) {
-        // O bote pode falhar: raposas maiores e mais rápidas que a presa acertam mais.
-        const bigger = clamp(a.traits.size / prey.traits.size, 0.5, 1.6);
-        const faster = clamp(a.traits.speed / prey.traits.speed, 0.6, 1.6);
-        a.rest = POUNCE_REST;
-        if (world.rng.chance(POUNCE_CHANCE * bigger * faster)) {
-          world.kill(prey, 'eaten');
-          a.energy = Math.min(cap, a.energy + MEAT[prey.species] * prey.traits.size);
-          a.rest = DIGEST_REST;
-        }
-      } else {
-        moved = moveToward(world, a, prey.x, prey.y, dist > SPRINT_DISTANCE ? STALK_EFFORT : SPRINT_EFFORT);
+      if (dist <= POUNCE_DISTANCE) pounce(world, a, prey, hunting);
+      else {
+        // Espreita devagar até ser visto ou chegar perto; aí dispara.
+        const sprint = dist <= SPRINT_DISTANCE || prey.state === 'flee';
+        moved = moveToward(world, a, prey.x, prey.y, sprint ? SPRINT_EFFORT : STALK_EFFORT);
       }
     } else {
-      // Sem presa à vista, a raposa fuça atrás de roedores, insetos e frutos:
-      // rende pouco, mas segura as épocas magras.
+      // Sem presa à vista: fuça atrás de roedores, insetos e frutos (rende pouco)
+      // e, se for um lobo, procura o bando.
       a.state = 'forage';
-      moved = wander(world, a, 0.5);
-      a.energy = Math.min(cap, a.energy + FORAGE);
+      moved = followPack(world, a, hunting) ?? wander(world, a, 0.5);
+      a.energy = Math.min(cap, a.energy + hunting.forage);
     }
   } else {
     a.state = 'wander';
-    // Saciada, a raposa fica quase parada poupando energia.
-    moved = wander(world, a, 0.15);
+    // Saciado, o predador fica quase parado poupando energia, perto do bando.
+    moved = followPack(world, a, hunting) ?? wander(world, a, 0.15);
   }
 
-  a.energy -= metabolism(a, moved, world.climate.cold);
+  a.energy -= metabolism(a, moved, world.climate.cold, resting);
+}
+
+/**
+ * O bote pode falhar: predadores maiores e mais rápidos que a presa acertam
+ * mais, e cada lobo do bando por perto aumenta a chance. A carne é dividida
+ * entre todos que participaram.
+ */
+function pounce(world: World, a: Animal, prey: Animal, hunting: Hunting): void {
+  const bigger = clamp(a.traits.size / prey.traits.size, 0.5, 1.6);
+  const faster = clamp(a.traits.speed / prey.traits.speed, 0.6, 1.6);
+  const helpers = hunting.pack
+    ? world.index[a.species].within(prey.x, prey.y, PACK_RADIUS).filter((w) => w !== a && w.rest === 0)
+    : [];
+  const chance = Math.min(0.95, hunting.chance * bigger * faster * (1 + PACK_BONUS * helpers.length));
+  a.rest = POUNCE_REST;
+  if (!world.rng.chance(chance)) return;
+
+  world.kill(prey, 'eaten');
+  const eaters = [a, ...helpers];
+  const share = meatOf(prey) / eaters.length;
+  for (const e of eaters) {
+    e.energy = Math.min(maxEnergy(e), e.energy + share);
+    // Refeição grande, digestão longa.
+    e.rest = Math.round(hunting.digest * Math.min(1, (2 * share) / maxEnergy(e)));
+    e.state = 'hunt';
+  }
+}
+
+/** Energia que a presa rende: cervos adultos alimentam um bando inteiro. */
+function meatOf(prey: Animal): number {
+  const young = prey.age < SPECIES[prey.species].maturityAge;
+  return MEAT[prey.species] * prey.traits.size * (young ? 0.4 : 1);
+}
+
+/** Lobos se mantêm perto do bando. Devolve a distância andada, ou null se já está junto. */
+function followPack(world: World, a: Animal, hunting: Hunting): number | null {
+  if (!hunting.pack) return null;
+  const mate = world.index[a.species].nearest(a.x, a.y, a.traits.vision * 2, (w) => w !== a);
+  if (!mate || Math.hypot(mate.x - a.x, mate.y - a.y) < PACK_SPACING) return null;
+  return moveToward(world, a, mate.x, mate.y, 0.6);
 }
 
 /** Arbusto acima disso é uma moita fechada, onde uma presa pequena some de vista. */
@@ -94,24 +150,41 @@ export function inCover(world: World, a: Animal): boolean {
   return world.plants.shrubs[world.terrain.index(a.cellX, a.cellY)] > COVER;
 }
 
-/** A presa mais próxima à vista: um coelho ou um filhote de cervo fora das moitas. */
-function nearestPrey(world: World, fox: Animal): Animal | null {
-  const r = fox.traits.vision;
-  const visible = (a: Animal) => !inCover(world, a);
-  const rabbit = world.index.rabbit.nearest(fox.x, fox.y, r, visible);
-  const fawn = world.index.deer.nearest(fox.x, fox.y, r, (a) => isPrey(a) && visible(a));
-  if (!rabbit || !fawn) return rabbit ?? fawn;
-  const dr = (rabbit.x - fox.x) ** 2 + (rabbit.y - fox.y) ** 2;
-  const df = (fawn.x - fox.x) ** 2 + (fawn.y - fox.y) ** 2;
-  return dr <= df ? rabbit : fawn;
+/** Presas pequenas (coelhos e filhotes) se escondem em moitas; cervos adultos não cabem. */
+function hidden(world: World, a: Animal): boolean {
+  const small = a.species === 'rabbit' || a.age < SPECIES[a.species].maturityAge;
+  return small && inCover(world, a);
+}
+
+/**
+ * A presa visível mais próxima, entre as espécies que o predador caça.
+ * Como o predador vai atrás do que encontra primeiro, ele caça mais a presa
+ * mais abundante e alivia a que está ficando rara (troca de presa).
+ */
+function nearestPrey(world: World, hunter: Animal): Animal | null {
+  const predator = hunter.species as Predator;
+  const r = hunter.traits.vision;
+  let best: Animal | null = null;
+  let bestDist = Infinity;
+  for (const species of PREY[predator]) {
+    const p = world.index[species].nearest(hunter.x, hunter.y, r, (a) => canHunt(predator, a) && !hidden(world, a));
+    if (!p) continue;
+    const d = (p.x - hunter.x) ** 2 + (p.y - hunter.y) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  return best;
 }
 
 /** Gasto de energia do tick, que depende do corpo e de quanto se moveu. */
-export function metabolism(a: Animal, moved: number, cold = 1): number {
+export function metabolism(a: Animal, moved: number, cold = 1, resting = false): number {
   const cfg = SPECIES[a.species];
   const { size, vision } = a.traits;
   // No frio, manter o corpo aquecido custa mais.
-  const body = cfg.baseMetabolism * size ** 0.75 * cold;
+  // Descansando (dormindo, digerindo) o corpo gasta menos.
+  const body = cfg.baseMetabolism * size ** 0.75 * cold * (resting ? 0.6 : 1);
   const senses = vision * 0.0025;
   const motion = cfg.moveCost * moved * moved * size;
   return body + senses + motion;
@@ -152,6 +225,24 @@ function eatAt(world: World, graze: Grazing, i: number, amount: number): number 
   return eaten;
 }
 
+/** O predador mais próximo, à vista, que consegue caçar esse animal. */
+function nearestThreat(world: World, a: Animal): Animal | null {
+  const range = a.traits.vision * 0.6;
+  let best: Animal | null = null;
+  let bestDist = Infinity;
+  for (const predator of PREDATORS) {
+    if (!canHunt(predator, a)) continue;
+    const p = world.index[predator].nearest(a.x, a.y, range);
+    if (!p) continue;
+    const d = (p.x - a.x) ** 2 + (p.y - a.y) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
 export function updateHerbivore(world: World, a: Animal): void {
   const species = a.species as 'rabbit' | 'deer';
   const cfg = SPECIES[species];
@@ -163,11 +254,11 @@ export function updateHerbivore(world: World, a: Animal): void {
   const hungry = a.energy < cap * cfg.hungerThreshold;
   const here = terrain.index(a.cellX, a.cellY);
 
-  // Perigo vem antes de tudo: uma raposa à vista faz a presa correr.
-  // Cervos adultos são grandes demais para raposas e não fogem.
+  // Perigo vem antes de tudo: um predador à vista faz a presa correr.
+  // Cervos adultos ignoram raposas, mas fogem de lobos.
   let courting = -1;
   let drinking = -1;
-  const threat = isPrey(a) ? world.index.fox.nearest(a.x, a.y, a.traits.vision * 0.6) : null;
+  const threat = nearestThreat(world, a);
   if (threat) {
     a.state = 'flee';
     a.targetX = -1;
@@ -267,7 +358,7 @@ function courtship(world: World, a: Animal): number {
     // Os machos esperam ser escolhidos; só as fêmeas procuram.
     if (a.sex === 'male' || a.mateSearch-- > 0) return -1;
     a.mateSearch = 15;
-    // Predadores são territoriais: com o território lotado, a fêmea não cria filhotes.
+    // Território lotado (predadores) ou área superlotada (cervos): a fêmea não cria filhotes.
     const territory = SPECIES[a.species].territory;
     if (territory && world.index[a.species].within(a.x, a.y, territory.radius).length > territory.max) return -1;
     p = chooseMate(world, a);

@@ -1,11 +1,11 @@
 import { Animal, type Traits } from './animal';
 import { climateAt, type Climate } from './climate';
-import { maxEnergy, releasePartner, updateFox, updateHerbivore } from './behavior';
+import { maxEnergy, releasePartner, updateHerbivore, updatePredator } from './behavior';
 import { GENES, crossover, defaultMutation, founderTraits, type MutationSettings } from './genes';
 import { Plants, defaultPlantSettings, type PlantSettings } from './plants';
 import { Random } from './random';
 import { SpatialHash } from './spatial';
-import { SPECIES, SPECIES_LIST, type Species } from './species';
+import { SPECIES, SPECIES_LIST, isPredator, type Species } from './species';
 import { Terrain, Tile } from './terrain';
 
 export interface WorldOptions {
@@ -15,6 +15,7 @@ export interface WorldOptions {
   rabbits: number;
   foxes: number;
   deer?: number;
+  wolves?: number;
 }
 
 export type DeathCause = 'starved' | 'old' | 'eaten' | 'thirst';
@@ -39,8 +40,13 @@ const MOTHER_RESERVE = 0.3;
 
 /** A cada quantos ticks a migração é verificada, e abaixo de quantos animais. */
 const MIGRATION_INTERVAL = 900;
-const MIGRATION_THRESHOLD: Record<Species, number> = { rabbit: 6, fox: 3, deer: 3 };
-const MIGRANTS: Record<Species, number> = { rabbit: 8, fox: 4, deer: 4 };
+const MIGRATION_THRESHOLD: Record<Species, number> = { rabbit: 6, fox: 3, deer: 3, wolf: 2 };
+const MIGRANTS: Record<Species, number> = { rabbit: 8, fox: 4, deer: 4, wolf: 4 };
+
+/** Um valor novo para cada espécie. */
+function perSpecies<T>(make: () => T): Record<Species, T> {
+  return Object.fromEntries(SPECIES_LIST.map((sp) => [sp, make()])) as Record<Species, T>;
+}
 
 export interface PopulationStats {
   count: number;
@@ -58,12 +64,8 @@ export class World {
   animals: Animal[] = [];
   /** Índice espacial de cada espécie, reconstruído a cada tick. */
   readonly index: Record<Species, SpatialHash>;
-  readonly deaths: Record<Species, Record<DeathCause, number>> = {
-    rabbit: { starved: 0, old: 0, eaten: 0, thirst: 0 },
-    fox: { starved: 0, old: 0, eaten: 0, thirst: 0 },
-    deer: { starved: 0, old: 0, eaten: 0, thirst: 0 },
-  };
-  readonly bornTotal: Record<Species, number> = { rabbit: 0, fox: 0, deer: 0 };
+  readonly deaths = perSpecies<Record<DeathCause, number>>(() => ({ starved: 0, old: 0, eaten: 0, thirst: 0 }));
+  readonly bornTotal = perSpecies(() => 0);
   migrations = 0;
   /** Média dos genes da última população com tamanho razoável (usada por migrantes). */
   private lastKnownTraits: Partial<Record<Species, Traits>> = {};
@@ -83,15 +85,12 @@ export class World {
     this.settings = settings;
     this.climate = climateAt(0, settings.seasons);
     this.hasWater = this.terrain.shore.some((s) => s === 1);
-    this.index = {
-      rabbit: new SpatialHash(options.cols, options.rows),
-      fox: new SpatialHash(options.cols, options.rows),
-      deer: new SpatialHash(options.cols, options.rows),
-    };
+    this.index = perSpecies(() => new SpatialHash(options.cols, options.rows));
 
     for (let i = 0; i < options.rabbits; i++) this.spawnRandom('rabbit');
     for (let i = 0; i < options.foxes; i++) this.spawnRandom('fox');
     for (let i = 0; i < (options.deer ?? 0); i++) this.spawnRandom('deer');
+    for (let i = 0; i < (options.wolves ?? 0); i++) this.spawnRandom('wolf');
   }
 
   /** Cria um animal numa célula de grama aleatória. */
@@ -122,7 +121,7 @@ export class World {
 
     for (const a of this.animals) {
       if (!a.alive) continue;
-      if (a.species === 'fox') updateFox(this, a);
+      if (isPredator(a.species)) updatePredator(this, a);
       else updateHerbivore(this, a);
       this.age(a);
     }

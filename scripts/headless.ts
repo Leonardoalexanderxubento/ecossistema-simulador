@@ -14,7 +14,7 @@ const seed = Number(args[1] ?? 42);
 const every = Number(args[2] ?? 600);
 
 const world = new World({ ...WORLD_SIZE, seed, ...INITIAL_POPULATION });
-const short = { rabbit: 'coelhos', fox: 'raposas', deer: 'cervos' };
+const short = { rabbit: 'coelhos', fox: 'raposas', deer: 'cervos', wolf: 'lobos' };
 const start = performance.now();
 for (let t = 0; t <= ticks; t++) {
   if (t % every === 0) {

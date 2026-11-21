@@ -3,7 +3,7 @@ import { geneFraction, type Gene } from '../sim/genes';
 import { SPECIES, type Species } from '../sim/species';
 import { Tile } from '../sim/terrain';
 
-const BASE_COLORS: Record<Species, string> = { rabbit: '#f1e4c8', fox: '#e98a4a', deer: '#c39bff' };
+const BASE_COLORS: Record<Species, string> = { rabbit: '#f1e4c8', fox: '#e98a4a', deer: '#c39bff', wolf: '#a9bccf' };
 const SHADOW = 'rgba(0,0,0,0.35)';
 
 function drawRabbit(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
@@ -34,6 +34,31 @@ function drawFox(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   shape(1, 1.5);
   ctx.fillStyle = color;
   shape(0, 0);
+  ctx.restore();
+}
+
+/** Lobo: ponta de flecha comprida, com contorno escuro para se destacar do capim. */
+function drawWolf(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heading: number, color: string): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  const shape = (dx: number, dy: number) => {
+    ctx.beginPath();
+    ctx.moveTo(r + dx, dy);
+    ctx.lineTo(-r * 0.8 + dx, r * 0.6 + dy);
+    ctx.lineTo(-r * 0.45 + dx, dy);
+    ctx.lineTo(-r * 0.8 + dx, -r * 0.6 + dy);
+    ctx.closePath();
+  };
+  ctx.fillStyle = SHADOW;
+  shape(1, 1.5);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = 'rgba(20,28,36,0.8)';
+  ctx.lineWidth = 1;
+  shape(0, 0);
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -228,6 +253,7 @@ export class Renderer {
       const color = this.animalColor(a);
       if (a.species === 'rabbit') drawRabbit(ctx, px, py, 3 * a.traits.size * young, color);
       else if (a.species === 'fox') drawFox(ctx, px, py, 5.2 * a.traits.size * young, a.heading, color);
+      else if (a.species === 'wolf') drawWolf(ctx, px, py, 6 * a.traits.size * young, a.heading, color);
       else drawDeer(ctx, px, py, 4.2 * a.traits.size * young, a.heading, color, young === 1 && a.sex === 'male');
     }
   }
@@ -250,6 +276,9 @@ export class Renderer {
       case 'deer':
         // Lilás (baixo) → magenta (alto).
         return `hsl(${265 + t * 55} ${55 + t * 30}% ${78 - t * 18}%)`;
+      case 'wolf':
+        // Cinza-claro (baixo) → azul-aço (alto).
+        return `hsl(${210 + t * 15} ${12 + t * 50}% ${80 - t * 22}%)`;
     }
   }
 

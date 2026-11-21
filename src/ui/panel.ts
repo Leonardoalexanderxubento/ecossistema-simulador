@@ -39,11 +39,12 @@ const COLORS = {
   rabbit: 'var(--rabbit)',
   fox: 'var(--fox)',
   deer: 'var(--deer)',
+  wolf: 'var(--wolf)',
   plants: 'var(--accent)',
 };
 
 /** Quantos animais cada botão "+" solta no mapa. */
-const ADD_AMOUNT: Record<Species, number> = { rabbit: 10, fox: 3, deer: 4 };
+const ADD_AMOUNT: Record<Species, number> = { rabbit: 10, fox: 3, deer: 4, wolf: 3 };
 
 /** Converte o valor bruto de um gene numa unidade legível. */
 export function formatGene(gene: Gene, value: number): string {
@@ -74,6 +75,7 @@ export class Panel {
       rabbit: css.getPropertyValue('--rabbit').trim(),
       fox: css.getPropertyValue('--fox').trim(),
       deer: css.getPropertyValue('--deer').trim(),
+      wolf: css.getPropertyValue('--wolf').trim(),
       plants: css.getPropertyValue('--accent').trim(),
     };
     this.popChart = new LineChart(this.$('#chart-pop') as HTMLCanvasElement);
@@ -297,7 +299,7 @@ function template(app: AppControls): string {
     <div class="stat"><span class="dot plants"></span><span class="label">Vegetação</span><strong id="s-plants">0%</strong></div>
     <div class="stat"><span class="label">Tempo</span><strong id="s-time">0s</strong></div>
     <div class="stat"><span class="label">Estação</span><strong id="s-season">Primavera</strong></div>
-    <div class="stat"><span class="label">Geração coelho / raposa / cervo</span><strong id="s-gen">1 / 1 / 1</strong></div>
+    <div class="stat"><span class="label">Geração (coelho / raposa / cervo / lobo)</span><strong id="s-gen">1 / 1 / 1 / 1</strong></div>
     <div class="stat"><span class="label">Presas caçadas</span><strong id="s-eaten">0</strong></div>
     <div class="stat"><span class="label">Mortes de sede</span><strong id="s-thirst">0</strong></div>
   </section>

@@ -16,6 +16,7 @@ export const GENE_RANGES: Record<Species, Record<Gene, [min: number, max: number
   rabbit: { speed: [0.04, 0.3], vision: [2, 20], size: [0.6, 1.8] },
   fox: { speed: [0.05, 0.36], vision: [3, 24], size: [0.6, 2] },
   deer: { speed: [0.04, 0.3], vision: [3, 22], size: [0.7, 2] },
+  wolf: { speed: [0.05, 0.34], vision: [4, 26], size: [0.7, 2] },
 };
 
 /** Valores de partida de cada espécie, antes de qualquer evolução. */
@@ -23,6 +24,7 @@ export const BASE_TRAITS: Record<Species, Traits> = {
   rabbit: { speed: 0.12, vision: 8, size: 1 },
   fox: { speed: 0.165, vision: 11, size: 1 },
   deer: { speed: 0.12, vision: 10, size: 1 },
+  wolf: { speed: 0.15, vision: 13, size: 1 },
 };
 
 export interface MutationSettings {

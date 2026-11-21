@@ -82,7 +82,7 @@ class App implements AppControls {
       generations,
       plantCover: this.grassCells > 0 ? w.plants.total() / this.grassCells : 0,
       migrations: w.migrations,
-      eaten: w.deaths.rabbit.eaten + w.deaths.deer.eaten,
+      eaten: SPECIES_LIST.reduce((n, sp) => n + w.deaths[sp].eaten, 0),
       thirst: SPECIES_LIST.reduce((n, sp) => n + w.deaths[sp].thirst, 0),
     };
   }
