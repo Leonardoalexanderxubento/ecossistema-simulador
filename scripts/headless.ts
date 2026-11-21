@@ -15,7 +15,14 @@ const start = performance.now();
 for (let t = 0; t <= ticks; t++) {
   if (t % 600 === 0) {
     const plants = world.plants.total().toFixed(0);
-    console.log(`tick ${String(t).padStart(6)}  coelhos ${String(world.count('rabbit')).padStart(4)}  raposas ${String(world.count('fox')).padStart(3)}  plantas ${plants}`);
+    const r = world.stats('rabbit');
+    const f = world.stats('fox');
+    const genes = (s: typeof r) =>
+      `vel ${s.traits.speed.toFixed(3)} vis ${s.traits.vision.toFixed(1)} tam ${s.traits.size.toFixed(2)} ger ${s.maxGeneration}`;
+    console.log(
+      `tick ${String(t).padStart(6)}  plantas ${plants.padStart(5)}  ` +
+        `coelhos ${String(r.count).padStart(4)} [${genes(r)}]  raposas ${String(f.count).padStart(3)} [${genes(f)}]`,
+    );
   }
   world.step();
 }

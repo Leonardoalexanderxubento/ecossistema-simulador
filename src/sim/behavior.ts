@@ -8,30 +8,48 @@ const PLANT_NUTRITION = 15;
 const BITE = 0.06;
 /** Energia que uma raposa ganha ao comer um coelho de tamanho 1. */
 const RABBIT_MEAT = 55;
-/** Distância (em células) em que a raposa alcança a presa. */
-const CATCH_DISTANCE = 0.8;
-/** Chance de o bote dar certo em cada tick ao alcance da presa. */
-const CATCH_CHANCE = 0.12;
+/** Distância (em células) de onde a raposa consegue dar o bote. */
+const POUNCE_DISTANCE = 1.4;
+/** Chance base de o bote dar certo (ajustada por tamanho e velocidade). */
+const POUNCE_CHANCE = 0.3;
+/** Ticks que a raposa precisa descansar depois de um bote. */
+const POUNCE_REST = 18;
 /** Multiplicador de velocidade em fuga ou perseguição (custa mais energia). */
 const FLEE_EFFORT = 1.25;
 const CHASE_EFFORT = 1.25;
 
+function clamp(v: number, min: number, max: number): number {
+  return v < min ? min : v > max ? max : v;
+}
+
+/** Animais maiores armazenam mais energia. */
+export function maxEnergy(a: Animal): number {
+  return SPECIES[a.species].maxEnergy * a.traits.size;
+}
+
 export function updateFox(world: World, a: Animal): void {
   const cfg = SPECIES.fox;
   let moved = 0;
-  const hungry = a.energy < cfg.maxEnergy * cfg.hungerThreshold;
+  const cap = maxEnergy(a);
+  const hungry = a.energy < cap * cfg.hungerThreshold;
 
-  if (hungry) {
+  if (a.rest > 0) {
+    // Recuperando o fôlego depois de um bote.
+    a.rest--;
+  } else if (hungry) {
     const prey = world.rabbitIndex.nearest(a.x, a.y, a.traits.vision);
     if (prey) {
       a.state = 'hunt';
       const dist = Math.hypot(prey.x - a.x, prey.y - a.y);
-      if (dist <= CATCH_DISTANCE) {
-        // O bote pode falhar; nesse caso a raposa fica um instante parada.
-        if (world.rng.chance(CATCH_CHANCE)) {
+      if (dist <= POUNCE_DISTANCE) {
+        // O bote pode falhar: raposas maiores e mais rápidas que a presa acertam mais.
+        const bigger = clamp(a.traits.size / prey.traits.size, 0.5, 1.6);
+        const faster = clamp(a.traits.speed / prey.traits.speed, 0.6, 1.6);
+        a.rest = POUNCE_REST;
+        if (world.rng.chance(POUNCE_CHANCE * bigger * faster)) {
           prey.alive = false;
           world.recordDeath(prey, 'eaten');
-          a.energy = Math.min(cfg.maxEnergy, a.energy + RABBIT_MEAT * prey.traits.size);
+          a.energy = Math.min(cap, a.energy + RABBIT_MEAT * prey.traits.size);
         }
       } else {
         moved = moveToward(world, a, prey.x, prey.y, CHASE_EFFORT);
@@ -63,7 +81,8 @@ export function updateRabbit(world: World, a: Animal): void {
   const { terrain, plants } = world;
   let moved = 0;
 
-  const hungry = a.energy < cfg.maxEnergy * cfg.hungerThreshold;
+  const cap = maxEnergy(a);
+  const hungry = a.energy < cap * cfg.hungerThreshold;
   const here = terrain.index(a.cellX, a.cellY);
 
   // Perigo vem antes da fome: uma raposa à vista faz o coelho correr.
@@ -77,7 +96,7 @@ export function updateRabbit(world: World, a: Animal): void {
     // Parado comendo.
     a.state = 'food';
     const eaten = plants.eat(here, BITE * a.traits.size);
-    a.energy = Math.min(cfg.maxEnergy, a.energy + eaten * PLANT_NUTRITION);
+    a.energy = Math.min(cap, a.energy + eaten * PLANT_NUTRITION);
     a.targetX = -1;
   } else if (hungry) {
     if (a.retarget <= 0 || a.targetX < 0 || plants.biomass[terrain.index(a.targetX, a.targetY)] <= 0.05) {

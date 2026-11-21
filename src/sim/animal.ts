@@ -28,6 +28,8 @@ export class Animal {
   /** Ticks até reavaliar o alvo. */
   retarget = 0;
   children = 0;
+  /** Ticks de descanso (ex.: depois de um bote). */
+  rest = 0;
 
   constructor(
     readonly species: Species,

@@ -1,3 +1,5 @@
+import type { Animal } from '../sim/animal';
+import { geneFraction, type Gene } from '../sim/genes';
 import { Tile } from '../sim/terrain';
 import type { World } from '../sim/world';
 
@@ -12,6 +14,8 @@ export class Renderer {
   private readonly gridCtx: CanvasRenderingContext2D;
   private readonly image: ImageData;
   private readonly baseColors: Uint8ClampedArray;
+  /** Gene usado para colorir os animais; `null` usa a cor da espécie. */
+  colorBy: Gene | null = 'speed';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -83,7 +87,7 @@ export class Renderer {
         ctx.beginPath();
         ctx.ellipse(px + 0.8, py + 1.2, r, r * 0.7, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = a.state === 'flee' ? '#ffffff' : '#f1e4c8';
+        ctx.fillStyle = this.animalColor(a);
         ctx.beginPath();
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
@@ -100,7 +104,7 @@ export class Renderer {
         ctx.lineTo(-r * 0.7 + 1, r * 0.75 + 1.5);
         ctx.lineTo(-r * 0.7 + 1, -r * 0.75 + 1.5);
         ctx.fill();
-        ctx.fillStyle = a.state === 'hunt' ? '#ff6a1a' : '#e98a4a';
+        ctx.fillStyle = this.animalColor(a);
         ctx.beginPath();
         ctx.moveTo(r, 0);
         ctx.lineTo(-r * 0.7, r * 0.75);
@@ -110,6 +114,22 @@ export class Renderer {
         ctx.restore();
       }
     }
+  }
+
+  /**
+   * Cor do animal. Colorindo por gene, valores baixos ficam na cor da
+   * espécie e valores altos vão para uma cor contrastante — assim dá para
+   * ver a população mudando ao longo das gerações.
+   */
+  private animalColor(a: Animal): string {
+    if (this.colorBy === null) return a.species === 'rabbit' ? '#f1e4c8' : '#e98a4a';
+    const t = Math.max(0, Math.min(1, geneFraction(a.species, this.colorBy, a.traits[this.colorBy])));
+    if (a.species === 'rabbit') {
+      // Creme (baixo) → ciano (alto).
+      return `hsl(${45 + t * 145} ${35 + t * 50}% ${88 - t * 18}%)`;
+    }
+    // Laranja-claro (baixo) → vermelho-escuro (alto).
+    return `hsl(${38 - t * 38} ${80 + t * 15}% ${62 - t * 22}%)`;
   }
 
   private paintGround(): void {
