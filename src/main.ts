@@ -1,11 +1,31 @@
 import './style.css';
+import { Renderer } from './render/renderer';
+import { randomSeed } from './sim/random';
+import { World } from './sim/world';
+
+const COLS = 160;
+const ROWS = 100;
+const CELL = 6;
+const TICKS_PER_SECOND = 30;
 
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
-canvas.width = 640;
-canvas.height = 400;
-const ctx = canvas.getContext('2d')!;
-ctx.fillStyle = '#1f2a1c';
-ctx.fillRect(0, 0, canvas.width, canvas.height);
-ctx.fillStyle = '#e6ecdf';
-ctx.font = '16px system-ui';
-ctx.fillText('Em breve: um ecossistema inteiro aqui.', 24, 40);
+const world = new World({ cols: COLS, rows: ROWS, seed: randomSeed() });
+const renderer = new Renderer(canvas, world, CELL);
+
+// Passo fixo: a simulação avança no mesmo ritmo em qualquer monitor.
+let accumulator = 0;
+let last = performance.now();
+const stepMs = 1000 / TICKS_PER_SECOND;
+
+function frame(now: number): void {
+  accumulator += Math.min(now - last, 250);
+  last = now;
+  while (accumulator >= stepMs) {
+    world.step();
+    accumulator -= stepMs;
+  }
+  renderer.draw();
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
