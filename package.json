@@ -1,0 +1,18 @@
+{
+  "name": "simulador-ecossistema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simulador de ecossistema com seleção natural: plantas, coelhos e raposas evoluindo no navegador.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}
