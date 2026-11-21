@@ -17,6 +17,8 @@ const POUNCE_REST = 18;
 /** Multiplicador de velocidade em fuga ou perseguição (custa mais energia). */
 const FLEE_EFFORT = 1.25;
 const CHASE_EFFORT = 1.25;
+/** Água recuperada por tick bebendo na margem. */
+const DRINK_RATE = 0.06;
 /** Distância em que o casal consegue acasalar. */
 const MATE_DISTANCE = 1.2;
 
@@ -36,9 +38,12 @@ export function updateFox(world: World, a: Animal): void {
   const hungry = a.energy < cap * cfg.hungerThreshold;
 
   let courting = -1;
+  let drinking = -1;
   if (a.rest > 0) {
     // Recuperando o fôlego depois de um bote.
     a.rest--;
+  } else if ((drinking = seekWater(world, a)) >= 0) {
+    moved = drinking;
   } else if ((courting = courtship(world, a)) >= 0) {
     moved = courting;
   } else if (hungry) {
@@ -92,12 +97,15 @@ export function updateRabbit(world: World, a: Animal): void {
 
   // Perigo vem antes da fome: uma raposa à vista faz o coelho correr.
   let courting = -1;
+  let drinking = -1;
   const threat = world.index.fox.nearest(a.x, a.y, a.traits.vision * 0.6);
   if (threat) {
     a.state = 'flee';
     a.targetX = -1;
     a.heading = Math.atan2(a.y - threat.y, a.x - threat.x) + world.rng.range(-0.3, 0.3);
     moved = step(world, a, a.traits.speed * FLEE_EFFORT);
+  } else if ((drinking = seekWater(world, a)) >= 0) {
+    moved = drinking;
   } else if ((courting = courtship(world, a)) >= 0) {
     moved = courting;
   } else if (hungry && plants.biomass[here] > 0.05) {
@@ -125,6 +133,29 @@ export function updateRabbit(world: World, a: Animal): void {
 
   a.retarget--;
   a.energy -= metabolism(a, moved, world.climate.cold);
+}
+
+/**
+ * Sede: com pouca água, o animal vai até a margem mais próxima e bebe
+ * até se saciar. Devolve a distância percorrida, ou -1 se não está com sede.
+ */
+function seekWater(world: World, a: Animal): number {
+  if (!world.settings.thirst) return -1;
+  const cfg = SPECIES[a.species];
+  const already = a.state === 'drink' && a.hydration < 0.98;
+  if (!already && a.hydration >= cfg.thirstThreshold) return -1;
+  const { terrain } = world;
+  const here = terrain.index(a.cellX, a.cellY);
+  const target = terrain.nearestShore[here];
+  if (target < 0) return -1;
+  a.state = 'drink';
+  if (target === here) {
+    a.hydration = Math.min(1, a.hydration + DRINK_RATE);
+    return 0;
+  }
+  const tx = target % terrain.cols;
+  const ty = (target - tx) / terrain.cols;
+  return moveToward(world, a, tx + 0.5, ty + 0.5, 1);
 }
 
 /** Adulto, descansado e com energia para gastar com filhotes. */

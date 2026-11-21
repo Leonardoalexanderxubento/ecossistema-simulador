@@ -31,6 +31,7 @@ export interface PanelStats {
   foxGeneration: number;
   migrations: number;
   eaten: number;
+  thirst: number;
 }
 
 const SPEEDS = [1, 2, 5, 10, 25];
@@ -119,6 +120,8 @@ export class Panel {
     this.bindRange('#p-strength', (v) => (app.settings.mutation.strength = v));
     const seasons = this.$('#p-seasons') as HTMLInputElement;
     seasons.addEventListener('change', () => (app.settings.seasons = seasons.checked));
+    const thirst = this.$('#p-thirst') as HTMLInputElement;
+    thirst.addEventListener('change', () => (app.settings.thirst = thirst.checked));
     const migration = this.$('#p-migration') as HTMLInputElement;
     migration.addEventListener('change', () => (app.settings.migration = migration.checked));
 
@@ -177,6 +180,7 @@ export class Panel {
     this.$('#s-season').textContent = this.app.settings.seasons ? `${SEASON_NAMES[c.season]} · ano ${c.year}` : 'desligadas';
     this.$('#s-gen').textContent = `${s.rabbitGeneration} / ${s.foxGeneration}`;
     this.$('#s-eaten').textContent = String(s.eaten);
+    this.$('#s-thirst').textContent = String(s.thirst);
     this.updateInspector();
   }
 
@@ -195,6 +199,7 @@ export class Panel {
         ${GENES.map((g) => `<dt>${GENE_LABELS[g]}</dt><dd>${formatGene(g, a.traits[g])}</dd>`).join('')}
         <dt>Sexo</dt><dd>${a.sex === 'female' ? 'fêmea' : 'macho'}</dd>
         <dt>Energia</dt><dd>${Math.max(0, a.energy).toFixed(0)}</dd>
+        <dt>Água</dt><dd>${Math.round(Math.max(0, a.hydration) * 100)}%</dd>
         <dt>Idade</dt><dd>${timeLabel(a.age)}</dd>
         <dt>Geração</dt><dd>${a.generation}</dd>
         <dt>Filhotes</dt><dd>${a.children}</dd>
@@ -245,6 +250,8 @@ function stateLabel(a: Animal): string {
       return 'fugindo!';
     case 'hunt':
       return 'caçando';
+    case 'drink':
+      return 'com sede (indo beber)';
     case 'mate':
       return a.partner ? `cortejando #${a.partner.id}` : 'procurando parceiro';
     default:
@@ -278,6 +285,7 @@ function template(app: AppControls): string {
     <div class="stat"><span class="label">Estação</span><strong id="s-season">Primavera</strong></div>
     <div class="stat"><span class="label">Geração coelho / raposa</span><strong id="s-gen">1 / 1</strong></div>
     <div class="stat"><span class="label">Coelhos caçados</span><strong id="s-eaten">0</strong></div>
+    <div class="stat"><span class="label">Mortes de sede</span><strong id="s-thirst">0</strong></div>
   </section>
 
   <section class="card">
@@ -330,6 +338,7 @@ function template(app: AppControls): string {
       <output for="p-strength"></output>
     </div>
     <label class="check"><input id="p-seasons" type="checkbox" ${settings.seasons ? 'checked' : ''} /> Estações do ano</label>
+    <label class="check"><input id="p-thirst" type="checkbox" ${settings.thirst ? 'checked' : ''} /> Sede (animais bebem nos lagos)</label>
     <label class="check"><input id="p-migration" type="checkbox" ${settings.migration ? 'checked' : ''} /> Migração quando uma espécie some</label>
     <div class="row">
       <button id="add-rabbits" class="btn small">+10 coelhos</button>

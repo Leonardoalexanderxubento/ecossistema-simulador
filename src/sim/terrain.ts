@@ -15,6 +15,10 @@ export class Terrain {
   readonly tiles: Uint8Array;
   readonly height: Float32Array;
   readonly fertility: Float32Array;
+  /** 1 nas células de terra vizinhas à água (onde os animais bebem). */
+  readonly shore: Uint8Array;
+  /** Para cada célula, o índice da margem mais próxima andando por terra (-1 se não há). */
+  readonly nearestShore: Int32Array;
 
   constructor(
     readonly cols: number,
@@ -49,6 +53,52 @@ export class Terrain {
           this.fertility[i] = clamp01(0.35 + m * 0.9 - (h - waterLevel) * 0.6);
         }
       }
+    }
+
+    this.shore = new Uint8Array(n);
+    this.nearestShore = new Int32Array(n).fill(-1);
+    this.mapShores();
+  }
+
+  /**
+   * Marca as margens e, com uma busca em largura que parte de todas elas
+   * ao mesmo tempo, descobre a margem mais próxima de cada célula.
+   * É calculado uma vez; depois cada animal sabe para onde ir beber.
+   */
+  private mapShores(): void {
+    const { cols, rows, tiles } = this;
+    const queue = new Int32Array(cols * rows);
+    let head = 0;
+    let tail = 0;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const i = y * cols + x;
+        if (tiles[i] === Tile.Water) continue;
+        const nearWater =
+          (x > 0 && tiles[i - 1] === Tile.Water) ||
+          (x < cols - 1 && tiles[i + 1] === Tile.Water) ||
+          (y > 0 && tiles[i - cols] === Tile.Water) ||
+          (y < rows - 1 && tiles[i + cols] === Tile.Water);
+        if (nearWater) {
+          this.shore[i] = 1;
+          this.nearestShore[i] = i;
+          queue[tail++] = i;
+        }
+      }
+    }
+    while (head < tail) {
+      const i = queue[head++];
+      const x = i % cols;
+      const y = (i - x) / cols;
+      const visit = (j: number) => {
+        if (tiles[j] === Tile.Water || this.nearestShore[j] !== -1) return;
+        this.nearestShore[j] = this.nearestShore[i];
+        queue[tail++] = j;
+      };
+      if (x > 0) visit(i - 1);
+      if (x < cols - 1) visit(i + 1);
+      if (y > 0) visit(i - cols);
+      if (y < rows - 1) visit(i + cols);
     }
   }
 

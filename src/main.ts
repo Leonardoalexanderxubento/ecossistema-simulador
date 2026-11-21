@@ -81,6 +81,7 @@ class App implements AppControls {
       foxGeneration: f.maxGeneration,
       migrations: w.migrations,
       eaten: w.deaths.rabbit.eaten,
+      thirst: w.deaths.rabbit.thirst + w.deaths.fox.thirst,
     };
   }
 

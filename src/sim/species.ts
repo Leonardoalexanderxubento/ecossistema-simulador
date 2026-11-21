@@ -20,6 +20,10 @@ export interface SpeciesConfig {
   hungerThreshold: number;
   /** Alcance da procura por parceiro, em múltiplos da visão (cheiro e chamados). */
   mateRange: number;
+  /** Água perdida por tick (multiplicada pelo calor da estação). */
+  thirstRate: number;
+  /** Abaixo dessa hidratação o animal vai beber. */
+  thirstThreshold: number;
 }
 
 export const SPECIES: Record<Species, SpeciesConfig> = {
@@ -35,19 +39,23 @@ export const SPECIES: Record<Species, SpeciesConfig> = {
     maxAge: 2400,
     hungerThreshold: 0.85,
     mateRange: 2,
+    thirstRate: 1 / 1800,
+    thirstThreshold: 0.4,
   },
   fox: {
     baseMetabolism: 0.07,
     moveCost: 2.6,
     maxEnergy: 160,
     reproduceAt: 120,
-    energyPerChild: 40,
-    litter: [1, 3],
-    reproduceCooldown: 700,
+    energyPerChild: 34,
+    litter: [2, 3],
+    reproduceCooldown: 600,
     maturityAge: 420,
     maxAge: 3600,
     hungerThreshold: 0.75,
     mateRange: 4,
+    thirstRate: 1 / 2000,
+    thirstThreshold: 0.35,
   },
 };
 

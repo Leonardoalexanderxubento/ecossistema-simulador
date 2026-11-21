@@ -11,7 +11,7 @@ export interface Traits {
   size: number;
 }
 
-export type AnimalState = 'wander' | 'food' | 'flee' | 'hunt' | 'mate';
+export type AnimalState = 'wander' | 'food' | 'flee' | 'hunt' | 'mate' | 'drink';
 export type Sex = 'male' | 'female';
 
 let nextId = 1;
@@ -32,6 +32,8 @@ export class Animal {
   /** Ticks de descanso (ex.: depois de um bote). */
   rest = 0;
   readonly sex: Sex;
+  /** Água no corpo, de 0 (morre de sede) a 1. */
+  hydration = 1;
   /** Parceiro escolhido para acasalar, enquanto os dois se aproximam. */
   partner: Animal | null = null;
   /** Ticks até a fêmea procurar parceiro de novo. */

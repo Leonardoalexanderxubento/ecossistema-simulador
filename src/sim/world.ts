@@ -16,7 +16,7 @@ export interface WorldOptions {
   foxes: number;
 }
 
-export type DeathCause = 'starved' | 'old' | 'eaten';
+export type DeathCause = 'starved' | 'old' | 'eaten' | 'thirst';
 
 export interface WorldSettings {
   plants: PlantSettings;
@@ -25,10 +25,12 @@ export interface WorldSettings {
   mutation: MutationSettings;
   /** Estações do ano: crescimento das plantas, frio e calor variam. */
   seasons: boolean;
+  /** Os animais precisam beber água nos lagos. */
+  thirst: boolean;
 }
 
 export function defaultSettings(): WorldSettings {
-  return { plants: { ...defaultPlantSettings }, migration: true, mutation: { ...defaultMutation }, seasons: true };
+  return { plants: { ...defaultPlantSettings }, migration: true, mutation: { ...defaultMutation }, seasons: true, thirst: true };
 }
 
 /** A cada quantos ticks a migração é verificada, e abaixo de quantos animais. */
@@ -53,8 +55,8 @@ export class World {
   /** Índice espacial de cada espécie, reconstruído a cada tick. */
   readonly index: Record<Species, SpatialHash>;
   readonly deaths: Record<Species, Record<DeathCause, number>> = {
-    rabbit: { starved: 0, old: 0, eaten: 0 },
-    fox: { starved: 0, old: 0, eaten: 0 },
+    rabbit: { starved: 0, old: 0, eaten: 0, thirst: 0 },
+    fox: { starved: 0, old: 0, eaten: 0, thirst: 0 },
   };
   readonly bornTotal: Record<Species, number> = { rabbit: 0, fox: 0 };
   migrations = 0;
@@ -63,6 +65,8 @@ export class World {
   tick = 0;
   /** Clima do tick atual. */
   climate: Climate;
+  /** Mapas sem lagos desligam a sede (ninguém teria onde beber). */
+  private readonly hasWater: boolean;
   private births: Animal[] = [];
 
   constructor(readonly options: WorldOptions, settings: WorldSettings = defaultSettings()) {
@@ -71,6 +75,7 @@ export class World {
     this.plants = new Plants(this.terrain, this.rng);
     this.settings = settings;
     this.climate = climateAt(0, settings.seasons);
+    this.hasWater = this.terrain.shore.some((s) => s === 1);
     this.index = {
       rabbit: new SpatialHash(options.cols, options.rows),
       fox: new SpatialHash(options.cols, options.rows),
@@ -90,6 +95,7 @@ export class World {
       const traits = founderTraits(species, this.rng, base);
       const animal = new Animal(species, x + 0.5, y + 0.5, traits, 0, 1, this.rng);
       animal.energy = maxEnergy(animal) * this.rng.range(0.5, 0.8);
+      animal.hydration = this.rng.range(0.6, 1);
       animal.age = this.rng.int(0, cfg.maturityAge * 2);
       this.animals.push(animal);
       return animal;
@@ -150,6 +156,13 @@ export class World {
     a.age++;
     if (a.cooldown > 0) a.cooldown--;
     const cfg = SPECIES[a.species];
+    if (this.settings.thirst && this.hasWater) {
+      a.hydration -= cfg.thirstRate * this.climate.heat;
+      if (a.hydration <= 0) {
+        this.kill(a, 'thirst');
+        return;
+      }
+    }
     if (a.energy <= 0) this.kill(a, 'starved');
     else if (a.age > cfg.maxAge) this.kill(a, 'old');
   }
