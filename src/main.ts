@@ -9,7 +9,7 @@ const CELL = 6;
 const TICKS_PER_SECOND = 30;
 
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
-const world = new World({ cols: COLS, rows: ROWS, seed: randomSeed(), rabbits: 120 });
+const world = new World({ cols: COLS, rows: ROWS, seed: randomSeed(), rabbits: 120, foxes: 14 });
 const renderer = new Renderer(canvas, world, CELL);
 
 // Passo fixo: a simulação avança no mesmo ritmo em qualquer monitor.

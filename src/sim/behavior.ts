@@ -6,6 +6,47 @@ import type { World } from './world';
 const PLANT_NUTRITION = 15;
 /** Biomassa que um coelho consegue comer por tick. */
 const BITE = 0.06;
+/** Energia que uma raposa ganha ao comer um coelho de tamanho 1. */
+const RABBIT_MEAT = 55;
+/** Distância (em células) em que a raposa alcança a presa. */
+const CATCH_DISTANCE = 0.8;
+/** Chance de o bote dar certo em cada tick ao alcance da presa. */
+const CATCH_CHANCE = 0.12;
+/** Multiplicador de velocidade em fuga ou perseguição (custa mais energia). */
+const FLEE_EFFORT = 1.25;
+const CHASE_EFFORT = 1.25;
+
+export function updateFox(world: World, a: Animal): void {
+  const cfg = SPECIES.fox;
+  let moved = 0;
+  const hungry = a.energy < cfg.maxEnergy * cfg.hungerThreshold;
+
+  if (hungry) {
+    const prey = world.rabbitIndex.nearest(a.x, a.y, a.traits.vision);
+    if (prey) {
+      a.state = 'hunt';
+      const dist = Math.hypot(prey.x - a.x, prey.y - a.y);
+      if (dist <= CATCH_DISTANCE) {
+        // O bote pode falhar; nesse caso a raposa fica um instante parada.
+        if (world.rng.chance(CATCH_CHANCE)) {
+          prey.alive = false;
+          world.recordDeath(prey, 'eaten');
+          a.energy = Math.min(cfg.maxEnergy, a.energy + RABBIT_MEAT * prey.traits.size);
+        }
+      } else {
+        moved = moveToward(world, a, prey.x, prey.y, CHASE_EFFORT);
+      }
+    } else {
+      a.state = 'wander';
+      moved = wander(world, a, 0.9);
+    }
+  } else {
+    a.state = 'wander';
+    moved = wander(world, a, 0.4);
+  }
+
+  a.energy -= metabolism(a, moved);
+}
 
 /** Gasto de energia do tick, que depende do corpo e de quanto se moveu. */
 export function metabolism(a: Animal, moved: number): number {
@@ -25,7 +66,14 @@ export function updateRabbit(world: World, a: Animal): void {
   const hungry = a.energy < cfg.maxEnergy * cfg.hungerThreshold;
   const here = terrain.index(a.cellX, a.cellY);
 
-  if (hungry && plants.biomass[here] > 0.05) {
+  // Perigo vem antes da fome: uma raposa à vista faz o coelho correr.
+  const threat = world.foxIndex.nearest(a.x, a.y, a.traits.vision * 0.6);
+  if (threat) {
+    a.state = 'flee';
+    a.targetX = -1;
+    a.heading = Math.atan2(a.y - threat.y, a.x - threat.x) + world.rng.range(-0.3, 0.3);
+    moved = step(world, a, a.traits.speed * FLEE_EFFORT);
+  } else if (hungry && plants.biomass[here] > 0.05) {
     // Parado comendo.
     a.state = 'food';
     const eaten = plants.eat(here, BITE * a.traits.size);
@@ -102,7 +150,7 @@ export function wander(world: World, a: Animal, effort: number): number {
  * Dá um passo na direção atual. Se o caminho estiver bloqueado (água ou
  * borda), tenta desviar para os lados antes de desistir.
  */
-function step(world: World, a: Animal, distance: number): number {
+export function step(world: World, a: Animal, distance: number): number {
   const { terrain } = world;
   const turns = [0, 0.6, -0.6, 1.2, -1.2, 2.2, -2.2];
   for (const t of turns) {

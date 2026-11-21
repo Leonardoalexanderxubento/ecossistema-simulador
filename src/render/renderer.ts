@@ -78,15 +78,36 @@ export class Renderer {
       const py = a.y * s;
       const young = a.age < 240 ? 0.7 : 1;
       if (a.species === 'rabbit') {
-        const r = 2.4 * a.traits.size * young;
+        const r = 3 * a.traits.size * young;
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath();
         ctx.ellipse(px + 0.8, py + 1.2, r, r * 0.7, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#f1e4c8';
+        ctx.fillStyle = a.state === 'flee' ? '#ffffff' : '#f1e4c8';
         ctx.beginPath();
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
+      } else {
+        // Raposa: triângulo apontando para onde ela vai.
+        const r = 5.2 * a.traits.size * young;
+        const h = a.heading;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(h);
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(r + 1, 1.5);
+        ctx.lineTo(-r * 0.7 + 1, r * 0.75 + 1.5);
+        ctx.lineTo(-r * 0.7 + 1, -r * 0.75 + 1.5);
+        ctx.fill();
+        ctx.fillStyle = a.state === 'hunt' ? '#ff6a1a' : '#e98a4a';
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(-r * 0.7, r * 0.75);
+        ctx.lineTo(-r * 0.7, -r * 0.75);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
     }
   }
