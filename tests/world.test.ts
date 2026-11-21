@@ -48,4 +48,18 @@ describe('World', () => {
       expect(b).toBeLessThanOrEqual(1);
     }
   });
+
+  it('há machos e fêmeas, e os casais se desfazem quando um morre', () => {
+    const world = run(13, 2000);
+    const sexes = world.sexes('rabbit');
+    expect(sexes.male).toBeGreaterThan(0);
+    expect(sexes.female).toBeGreaterThan(0);
+    for (const a of world.animals) {
+      if (!a.partner) continue;
+      expect(a.alive).toBe(true);
+      expect(a.partner.alive).toBe(true);
+      expect(a.partner.species).toBe(a.species);
+      expect(a.partner.sex).not.toBe(a.sex);
+    }
+  });
 });

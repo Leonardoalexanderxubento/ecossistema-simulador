@@ -17,6 +17,8 @@ const POUNCE_REST = 18;
 /** Multiplicador de velocidade em fuga ou perseguição (custa mais energia). */
 const FLEE_EFFORT = 1.25;
 const CHASE_EFFORT = 1.25;
+/** Distância em que o casal consegue acasalar. */
+const MATE_DISTANCE = 1.2;
 
 function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
@@ -33,11 +35,14 @@ export function updateFox(world: World, a: Animal): void {
   const cap = maxEnergy(a);
   const hungry = a.energy < cap * cfg.hungerThreshold;
 
+  let courting = -1;
   if (a.rest > 0) {
     // Recuperando o fôlego depois de um bote.
     a.rest--;
+  } else if ((courting = courtship(world, a)) >= 0) {
+    moved = courting;
   } else if (hungry) {
-    const prey = world.rabbitIndex.nearest(a.x, a.y, a.traits.vision);
+    const prey = world.index.rabbit.nearest(a.x, a.y, a.traits.vision);
     if (prey) {
       a.state = 'hunt';
       const dist = Math.hypot(prey.x - a.x, prey.y - a.y);
@@ -47,8 +52,7 @@ export function updateFox(world: World, a: Animal): void {
         const faster = clamp(a.traits.speed / prey.traits.speed, 0.6, 1.6);
         a.rest = POUNCE_REST;
         if (world.rng.chance(POUNCE_CHANCE * bigger * faster)) {
-          prey.alive = false;
-          world.recordDeath(prey, 'eaten');
+          world.kill(prey, 'eaten');
           a.energy = Math.min(cap, a.energy + RABBIT_MEAT * prey.traits.size);
         }
       } else {
@@ -86,12 +90,15 @@ export function updateRabbit(world: World, a: Animal): void {
   const here = terrain.index(a.cellX, a.cellY);
 
   // Perigo vem antes da fome: uma raposa à vista faz o coelho correr.
-  const threat = world.foxIndex.nearest(a.x, a.y, a.traits.vision * 0.6);
+  let courting = -1;
+  const threat = world.index.fox.nearest(a.x, a.y, a.traits.vision * 0.6);
   if (threat) {
     a.state = 'flee';
     a.targetX = -1;
     a.heading = Math.atan2(a.y - threat.y, a.x - threat.x) + world.rng.range(-0.3, 0.3);
     moved = step(world, a, a.traits.speed * FLEE_EFFORT);
+  } else if ((courting = courtship(world, a)) >= 0) {
+    moved = courting;
   } else if (hungry && plants.biomass[here] > 0.05) {
     // Parado comendo.
     a.state = 'food';
@@ -117,6 +124,76 @@ export function updateRabbit(world: World, a: Animal): void {
 
   a.retarget--;
   a.energy -= metabolism(a, moved);
+}
+
+/** Adulto, descansado e com energia para gastar com filhotes. */
+export function readyToBreed(a: Animal): boolean {
+  const cfg = SPECIES[a.species];
+  // Machos gastam pouco com a ninhada, então precisam de menos reserva.
+  let need = cfg.reproduceAt * a.traits.size * (a.sex === 'female' ? 1 : 0.6);
+  // Quem já está a caminho do parceiro não desiste por gastar um pouco no trajeto.
+  if (a.partner) need *= 0.85;
+  return a.alive && a.age >= cfg.maturityAge && a.cooldown <= 0 && a.energy >= need;
+}
+
+/** Desfaz o casal (dos dois lados). */
+export function releasePartner(a: Animal): void {
+  if (a.partner && a.partner.partner === a) a.partner.partner = null;
+  a.partner = null;
+}
+
+/**
+ * Corte e acasalamento. A fêmea pronta procura machos por perto e escolhe
+ * o de maior tamanho e mais bem alimentado (seleção sexual); os dois
+ * caminham um em direção ao outro e, quando se encontram, nasce a ninhada.
+ * Devolve a distância percorrida, ou -1 se o animal não está cortejando.
+ */
+function courtship(world: World, a: Animal): number {
+  if (!readyToBreed(a)) {
+    releasePartner(a);
+    return -1;
+  }
+  let p = a.partner;
+  if (p) {
+    const far = Math.hypot(p.x - a.x, p.y - a.y) > a.traits.vision * SPECIES[a.species].mateRange * 1.5;
+    if (p.partner !== a || !readyToBreed(p) || far) {
+      releasePartner(a);
+      p = null;
+    }
+  }
+  if (!p) {
+    // Os machos esperam ser escolhidos; só as fêmeas procuram.
+    if (a.sex === 'male' || a.mateSearch-- > 0) return -1;
+    a.mateSearch = 15;
+    p = chooseMate(world, a);
+    if (!p) return -1;
+    a.partner = p;
+    p.partner = a;
+  }
+  a.state = 'mate';
+  const dist = Math.hypot(p.x - a.x, p.y - a.y);
+  if (dist <= MATE_DISTANCE) {
+    if (a.sex === 'female') world.mate(a, p);
+    return 0;
+  }
+  return moveToward(world, a, p.x, p.y, 1);
+}
+
+function chooseMate(world: World, female: Animal): Animal | null {
+  const candidates = world.index[female.species].within(female.x, female.y, female.traits.vision * SPECIES[female.species].mateRange);
+  let best: Animal | null = null;
+  let bestScore = 0;
+  for (const m of candidates) {
+    if (m.sex !== 'male' || m.partner || !readyToBreed(m)) continue;
+    const d = Math.hypot(m.x - female.x, m.y - female.y);
+    const condition = m.energy / maxEnergy(m);
+    const score = (m.traits.size * condition) / (1 + d * 0.15);
+    if (score > bestScore) {
+      bestScore = score;
+      best = m;
+    }
+  }
+  return best;
 }
 
 /** Procura, dentro da visão, a célula com mais comida (pesada pela distância). */

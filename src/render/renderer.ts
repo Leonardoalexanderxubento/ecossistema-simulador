@@ -72,6 +72,7 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.grid, 0, 0, this.canvas.width, this.canvas.height);
+    this.drawCouples();
     this.drawAnimals();
     this.drawSelection();
   }
@@ -94,6 +95,25 @@ export class Renderer {
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(a.x * s, a.y * s, 9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Linha discreta ligando cada casal enquanto eles se aproximam. */
+  private drawCouples(): void {
+    const ctx = this.ctx;
+    const s = this.cellSize;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,150,200,0.55)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    for (const a of this.world.animals) {
+      const p = a.partner;
+      if (!a.alive || a.sex !== 'female' || !p || !p.alive) continue;
+      ctx.moveTo(a.x * s, a.y * s);
+      ctx.lineTo(p.x * s, p.y * s);
+    }
     ctx.stroke();
     ctx.restore();
   }

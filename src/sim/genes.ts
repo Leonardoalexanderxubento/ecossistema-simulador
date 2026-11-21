@@ -53,6 +53,23 @@ export function inherit(species: Species, parent: Traits, rng: Random, settings:
 }
 
 /**
+ * Reprodução sexuada: cada gene vem inteiro da mãe ou do pai, sorteado
+ * de forma independente (como cromossomos diferentes), e depois pode
+ * sofrer mutação. Misturar os pais cria combinações novas a cada ninhada.
+ */
+export function crossover(
+  species: Species,
+  mother: Traits,
+  father: Traits,
+  rng: Random,
+  settings: MutationSettings,
+): Traits {
+  const mix = { ...mother };
+  for (const gene of GENES) if (rng.chance(0.5)) mix[gene] = father[gene];
+  return inherit(species, mix, rng, settings);
+}
+
+/**
  * Genes de um animal que chega sem pais no mapa: os valores de referência
  * (por padrão, os da espécie original) com variação natural, para a
  * seleção ter com o que trabalhar.

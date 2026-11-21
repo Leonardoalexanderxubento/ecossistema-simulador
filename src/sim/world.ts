@@ -1,10 +1,10 @@
 import { Animal, type Traits } from './animal';
-import { maxEnergy, updateFox, updateRabbit } from './behavior';
-import { GENES, defaultMutation, founderTraits, inherit, type MutationSettings } from './genes';
+import { maxEnergy, releasePartner, updateFox, updateRabbit } from './behavior';
+import { GENES, crossover, defaultMutation, founderTraits, type MutationSettings } from './genes';
 import { Plants, defaultPlantSettings, type PlantSettings } from './plants';
 import { Random } from './random';
 import { SpatialHash } from './spatial';
-import { SPECIES, type Species } from './species';
+import { SPECIES, SPECIES_LIST, type Species } from './species';
 import { Terrain, Tile } from './terrain';
 
 export interface WorldOptions {
@@ -30,8 +30,8 @@ export function defaultSettings(): WorldSettings {
 
 /** A cada quantos ticks a migração é verificada, e abaixo de quantos animais. */
 const MIGRATION_INTERVAL = 900;
-const MIGRATION_THRESHOLD: Record<Species, number> = { rabbit: 6, fox: 2 };
-const MIGRANTS: Record<Species, number> = { rabbit: 8, fox: 3 };
+const MIGRATION_THRESHOLD: Record<Species, number> = { rabbit: 6, fox: 3 };
+const MIGRANTS: Record<Species, number> = { rabbit: 8, fox: 4 };
 
 export interface PopulationStats {
   count: number;
@@ -47,8 +47,8 @@ export class World {
   readonly plants: Plants;
   readonly settings: WorldSettings;
   animals: Animal[] = [];
-  readonly rabbitIndex: SpatialHash;
-  readonly foxIndex: SpatialHash;
+  /** Índice espacial de cada espécie, reconstruído a cada tick. */
+  readonly index: Record<Species, SpatialHash>;
   readonly deaths: Record<Species, Record<DeathCause, number>> = {
     rabbit: { starved: 0, old: 0, eaten: 0 },
     fox: { starved: 0, old: 0, eaten: 0 },
@@ -65,8 +65,10 @@ export class World {
     this.terrain = new Terrain(options.cols, options.rows, this.rng);
     this.plants = new Plants(this.terrain, this.rng);
     this.settings = settings;
-    this.rabbitIndex = new SpatialHash(options.cols, options.rows);
-    this.foxIndex = new SpatialHash(options.cols, options.rows);
+    this.index = {
+      rabbit: new SpatialHash(options.cols, options.rows),
+      fox: new SpatialHash(options.cols, options.rows),
+    };
 
     for (let i = 0; i < options.rabbits; i++) this.spawnRandom('rabbit');
     for (let i = 0; i < options.foxes; i++) this.spawnRandom('fox');
@@ -91,15 +93,15 @@ export class World {
 
   step(): void {
     this.plants.step(this.rng, this.settings.plants);
-    this.rabbitIndex.rebuild(this.animals.filter((a) => a.species === 'rabbit'));
-    this.foxIndex.rebuild(this.animals.filter((a) => a.species === 'fox'));
+    for (const species of SPECIES_LIST) {
+      this.index[species].rebuild(this.animals.filter((a) => a.species === species));
+    }
 
     for (const a of this.animals) {
       if (!a.alive) continue;
       if (a.species === 'rabbit') updateRabbit(this, a);
       else updateFox(this, a);
       this.age(a);
-      if (a.alive) this.tryReproduce(a);
     }
 
     if (this.births.length > 0) {
@@ -113,7 +115,7 @@ export class World {
   }
 
   private rememberTraits(): void {
-    for (const species of ['rabbit', 'fox'] as const) {
+    for (const species of SPECIES_LIST) {
       const s = this.stats(species);
       if (s.count >= 8) this.lastKnownTraits[species] = s.traits;
     }
@@ -125,8 +127,10 @@ export class World {
    * evoluído em paralelo numa região vizinha.
    */
   private migrate(): void {
-    for (const species of ['rabbit', 'fox'] as const) {
-      if (this.count(species) >= MIGRATION_THRESHOLD[species]) continue;
+    for (const species of SPECIES_LIST) {
+      // Também chegam migrantes se sobrou só um sexo: a espécie não teria futuro.
+      const s = this.sexes(species);
+      if (s.male + s.female >= MIGRATION_THRESHOLD[species] && s.male > 0 && s.female > 0) continue;
       for (let i = 0; i < MIGRANTS[species]; i++) {
         const a = this.spawnRandom(species, this.lastKnownTraits[species]);
         if (a) a.age = SPECIES[species].maturityAge;
@@ -139,53 +143,60 @@ export class World {
     a.age++;
     if (a.cooldown > 0) a.cooldown--;
     const cfg = SPECIES[a.species];
-    if (a.energy <= 0) {
-      a.alive = false;
-      this.recordDeath(a, 'starved');
-    } else if (a.age > cfg.maxAge) {
-      a.alive = false;
-      this.recordDeath(a, 'old');
-    }
+    if (a.energy <= 0) this.kill(a, 'starved');
+    else if (a.age > cfg.maxAge) this.kill(a, 'old');
   }
 
-  recordDeath(a: Animal, cause: DeathCause): void {
+  kill(a: Animal, cause: DeathCause): void {
+    a.alive = false;
+    releasePartner(a);
     this.deaths[a.species][cause]++;
   }
 
   /**
-   * Reprodução assexuada: filhotes herdam os genes do pai/mãe, com mutações.
-   * Animais maiores precisam de mais energia para ter filhotes, que já
-   * nascem proporcionalmente maiores.
+   * Reprodução sexuada: a mãe carrega a ninhada e paga a maior parte da
+   * energia; o pai contribui com pouco. Cada filhote recebe uma mistura
+   * dos genes dos dois, com mutações. Mães maiores têm filhotes maiores,
+   * que custam mais energia.
    */
-  private tryReproduce(parent: Animal): void {
-    const cfg = SPECIES[parent.species];
-    const size = parent.traits.size;
-    if (parent.age < cfg.maturityAge || parent.cooldown > 0 || parent.energy < cfg.reproduceAt * size) return;
-
+  mate(mother: Animal, father: Animal): void {
+    const cfg = SPECIES[mother.species];
+    const size = mother.traits.size;
     const cost = cfg.energyPerChild * size;
     const litter = this.rng.int(cfg.litter[0], cfg.litter[1]);
     for (let i = 0; i < litter; i++) {
-      if (parent.energy < cost * 1.5) break;
-      parent.energy -= cost;
+      if (mother.energy < cost * 1.5) break;
+      mother.energy -= cost;
       const child = new Animal(
-        parent.species,
-        parent.x + this.rng.range(-0.4, 0.4),
-        parent.y + this.rng.range(-0.4, 0.4),
-        inherit(parent.species, parent.traits, this.rng, this.settings.mutation),
+        mother.species,
+        mother.x + this.rng.range(-0.4, 0.4),
+        mother.y + this.rng.range(-0.4, 0.4),
+        crossover(mother.species, mother.traits, father.traits, this.rng, this.settings.mutation),
         cost * 0.9,
-        parent.generation + 1,
+        Math.max(mother.generation, father.generation) + 1,
         this.rng,
       );
       child.cooldown = cfg.maturityAge;
       if (!this.terrain.walkable(child.cellX, child.cellY)) {
-        child.x = parent.x;
-        child.y = parent.y;
+        child.x = mother.x;
+        child.y = mother.y;
       }
       this.births.push(child);
-      this.bornTotal[parent.species]++;
-      parent.children++;
+      this.bornTotal[mother.species]++;
+      mother.children++;
+      father.children++;
     }
-    parent.cooldown = cfg.reproduceCooldown;
+    father.energy -= cfg.energyPerChild * 0.2 * father.traits.size;
+    mother.cooldown = cfg.reproduceCooldown;
+    father.cooldown = Math.round(cfg.reproduceCooldown * 0.35);
+    releasePartner(mother);
+  }
+
+  /** Quantos machos e fêmeas vivos a espécie tem. */
+  sexes(species: Species): Record<'male' | 'female', number> {
+    const n = { male: 0, female: 0 };
+    for (const a of this.animals) if (a.alive && a.species === species) n[a.sex]++;
+    return n;
   }
 
   stats(species: Species): PopulationStats {

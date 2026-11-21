@@ -11,7 +11,8 @@ export interface Traits {
   size: number;
 }
 
-export type AnimalState = 'wander' | 'food' | 'flee' | 'hunt';
+export type AnimalState = 'wander' | 'food' | 'flee' | 'hunt' | 'mate';
+export type Sex = 'male' | 'female';
 
 let nextId = 1;
 
@@ -30,6 +31,11 @@ export class Animal {
   children = 0;
   /** Ticks de descanso (ex.: depois de um bote). */
   rest = 0;
+  readonly sex: Sex;
+  /** Parceiro escolhido para acasalar, enquanto os dois se aproximam. */
+  partner: Animal | null = null;
+  /** Ticks até a fêmea procurar parceiro de novo. */
+  mateSearch = 0;
 
   constructor(
     readonly species: Species,
@@ -40,6 +46,7 @@ export class Animal {
     readonly generation: number,
     rng: Random,
   ) {
+    this.sex = rng.chance(0.5) ? 'female' : 'male';
     this.heading = rng.range(0, Math.PI * 2);
     this.cooldown = rng.int(0, 120);
   }

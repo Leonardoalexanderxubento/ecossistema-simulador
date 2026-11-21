@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_TRAITS, GENES, GENE_RANGES, clampGene, founderTraits, inherit } from '../src/sim/genes';
+import { BASE_TRAITS, GENES, GENE_RANGES, clampGene, crossover, founderTraits, inherit } from '../src/sim/genes';
 import { Random } from '../src/sim/random';
 
 describe('genes', () => {
@@ -46,5 +46,22 @@ describe('genes', () => {
   it('clampGene corta valores fora da faixa', () => {
     expect(clampGene('rabbit', 'size', 99)).toBe(GENE_RANGES.rabbit.size[1]);
     expect(clampGene('rabbit', 'size', -1)).toBe(GENE_RANGES.rabbit.size[0]);
+  });
+
+  it('no cruzamento, cada gene vem inteiro da mãe ou do pai', () => {
+    const rng = new Random(5);
+    const mother = { speed: 0.1, vision: 6, size: 0.8 };
+    const father = { speed: 0.2, vision: 12, size: 1.4 };
+    const fromFather = { speed: 0, vision: 0, size: 0 };
+    const n = 2000;
+    for (let i = 0; i < n; i++) {
+      const child = crossover('rabbit', mother, father, rng, { rate: 0, strength: 0 });
+      for (const g of GENES) {
+        expect([mother[g], father[g]]).toContain(child[g]);
+        if (child[g] === father[g]) fromFather[g]++;
+      }
+    }
+    // Cerca de metade dos genes vem de cada lado.
+    for (const g of GENES) expect(fromFather[g] / n).toBeCloseTo(0.5, 1);
   });
 });

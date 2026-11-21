@@ -187,6 +187,7 @@ export class Panel {
       <div class="insp-head"><strong>${name} #${a.id}</strong><span>${status}</span></div>
       <dl class="insp-grid">
         ${GENES.map((g) => `<dt>${GENE_LABELS[g]}</dt><dd>${formatGene(g, a.traits[g])}</dd>`).join('')}
+        <dt>Sexo</dt><dd>${a.sex === 'female' ? 'fêmea' : 'macho'}</dd>
         <dt>Energia</dt><dd>${Math.max(0, a.energy).toFixed(0)}</dd>
         <dt>Idade</dt><dd>${timeLabel(a.age)}</dd>
         <dt>Geração</dt><dd>${a.generation}</dd>
@@ -237,6 +238,8 @@ function stateLabel(a: Animal): string {
       return 'fugindo!';
     case 'hunt':
       return 'caçando';
+    case 'mate':
+      return a.partner ? `cortejando #${a.partner.id}` : 'procurando parceiro';
     default:
       return a.rest > 0 ? 'descansando' : 'passeando';
   }

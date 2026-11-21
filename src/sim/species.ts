@@ -18,6 +18,8 @@ export interface SpeciesConfig {
   maxAge: number;
   /** Abaixo dessa fração da energia máxima o animal procura comida. */
   hungerThreshold: number;
+  /** Alcance da procura por parceiro, em múltiplos da visão (cheiro e chamados). */
+  mateRange: number;
 }
 
 export const SPECIES: Record<Species, SpeciesConfig> = {
@@ -32,17 +34,21 @@ export const SPECIES: Record<Species, SpeciesConfig> = {
     maturityAge: 300,
     maxAge: 2400,
     hungerThreshold: 0.85,
+    mateRange: 2,
   },
   fox: {
     baseMetabolism: 0.07,
     moveCost: 2.6,
     maxEnergy: 160,
-    reproduceAt: 130,
-    energyPerChild: 55,
-    litter: [1, 2],
-    reproduceCooldown: 900,
+    reproduceAt: 120,
+    energyPerChild: 40,
+    litter: [1, 3],
+    reproduceCooldown: 700,
     maturityAge: 420,
     maxAge: 3600,
     hungerThreshold: 0.75,
+    mateRange: 4,
   },
 };
+
+export const SPECIES_LIST = Object.keys(SPECIES) as Species[];
