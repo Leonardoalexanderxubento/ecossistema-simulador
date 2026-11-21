@@ -16,6 +16,8 @@ export class Renderer {
   private readonly baseColors: Uint8ClampedArray;
   /** Gene usado para colorir os animais; `null` usa a cor da espécie. */
   colorBy: Gene | null = 'speed';
+  /** Animal destacado (inspetor). */
+  selected: Animal | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -71,6 +73,29 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.grid, 0, 0, this.canvas.width, this.canvas.height);
     this.drawAnimals();
+    this.drawSelection();
+  }
+
+  /** Anel em volta do animal selecionado e um círculo mostrando o alcance da visão. */
+  private drawSelection(): void {
+    const a = this.selected;
+    if (!a || !a.alive) return;
+    const ctx = this.ctx;
+    const s = this.cellSize;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(a.x * s, a.y * s, a.traits.vision * s, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(a.x * s, a.y * s, 9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawAnimals(): void {
