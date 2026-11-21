@@ -24,6 +24,8 @@ export interface SpeciesConfig {
   thirstRate: number;
   /** Abaixo dessa hidratação o animal vai beber. */
   thirstThreshold: number;
+  /** Territorialidade: acima de `max` vizinhos da espécie no raio, a fêmea não se reproduz. */
+  territory?: { radius: number; max: number };
 }
 
 export const SPECIES: Record<Species, SpeciesConfig> = {
@@ -43,19 +45,20 @@ export const SPECIES: Record<Species, SpeciesConfig> = {
     thirstThreshold: 0.4,
   },
   fox: {
-    baseMetabolism: 0.07,
-    moveCost: 2.6,
+    baseMetabolism: 0.055,
+    moveCost: 1.8,
     maxEnergy: 160,
-    reproduceAt: 120,
-    energyPerChild: 34,
+    reproduceAt: 110,
+    energyPerChild: 40,
     litter: [2, 3],
     reproduceCooldown: 600,
     maturityAge: 420,
     maxAge: 3600,
     hungerThreshold: 0.75,
-    mateRange: 4,
+    mateRange: 12,
     thirstRate: 1 / 2000,
     thirstThreshold: 0.35,
+    territory: { radius: 14, max: 3 },
   },
   deer: {
     baseMetabolism: 0.26,

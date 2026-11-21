@@ -11,7 +11,7 @@ export interface Traits {
   size: number;
 }
 
-export type AnimalState = 'wander' | 'food' | 'flee' | 'hunt' | 'mate' | 'drink';
+export type AnimalState = 'wander' | 'food' | 'flee' | 'hunt' | 'mate' | 'drink' | 'forage';
 export type Sex = 'male' | 'female';
 
 let nextId = 1;

@@ -34,6 +34,9 @@ export function defaultSettings(): WorldSettings {
   return { plants: { ...defaultPlantSettings }, migration: true, mutation: { ...defaultMutation }, seasons: true, thirst: true };
 }
 
+/** Fração da energia máxima que a mãe nunca gasta com a ninhada. */
+const MOTHER_RESERVE = 0.3;
+
 /** A cada quantos ticks a migração é verificada, e abaixo de quantos animais. */
 const MIGRATION_INTERVAL = 900;
 const MIGRATION_THRESHOLD: Record<Species, number> = { rabbit: 6, fox: 3, deer: 3 };
@@ -194,14 +197,15 @@ export class World {
     const cost = cfg.energyPerChild * size;
     const litter = this.rng.int(cfg.litter[0], cfg.litter[1]);
     for (let i = 0; i < litter; i++) {
-      if (mother.energy < cost * 1.5) break;
+      // A mãe guarda uma reserva para sobreviver depois do parto.
+      if (mother.energy - cost < maxEnergy(mother) * MOTHER_RESERVE) break;
       mother.energy -= cost;
       const child = new Animal(
         mother.species,
         mother.x + this.rng.range(-0.4, 0.4),
         mother.y + this.rng.range(-0.4, 0.4),
         crossover(mother.species, mother.traits, father.traits, this.rng, this.settings.mutation),
-        cost * 0.9,
+        cost,
         Math.max(mother.generation, father.generation) + 1,
         this.rng,
       );

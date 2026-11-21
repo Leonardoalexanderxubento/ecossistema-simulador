@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Random } from '../src/sim/random';
 import { Tile } from '../src/sim/terrain';
+import { maxEnergy } from '../src/sim/behavior';
 import { World, defaultSettings } from '../src/sim/world';
 
 const options = { cols: 80, rows: 50, rabbits: 60, foxes: 6 };
@@ -118,5 +119,16 @@ describe('World', () => {
     const adultsDead = 20 - adultsLeft;
     expect(world.deaths.deer.eaten).toBeLessThanOrEqual(world.bornTotal.deer);
     expect(adultsDead).toBeLessThanOrEqual(world.deaths.deer.starved + world.deaths.deer.thirst + world.deaths.deer.old);
+  });
+
+  it('a mãe sempre guarda uma reserva de energia depois do parto', () => {
+    const world = new World({ ...options, seed: 31, rabbits: 0, foxes: 12 });
+    const mother = world.animals.find((a) => a.sex === 'female')!;
+    const father = world.animals.find((a) => a.sex === 'male')!;
+    for (const energy of [100, 130, 160]) {
+      mother.energy = energy;
+      world.mate(mother, father);
+      expect(mother.energy).toBeGreaterThanOrEqual(maxEnergy(mother) * 0.3 - 1e-9);
+    }
   });
 });

@@ -6,7 +6,7 @@ import type { World } from './world';
 /** Quanto de energia um herbívoro tira de 1.0 de biomassa. */
 const PLANT_NUTRITION = 15;
 /** Energia que uma raposa ganha ao comer uma presa de tamanho 1. */
-const MEAT: Record<string, number> = { rabbit: 65, deer: 80 };
+const MEAT: Record<string, number> = { rabbit: 85, deer: 100 };
 /** Distância (em células) de onde a raposa consegue dar o bote. */
 const POUNCE_DISTANCE = 1.4;
 /** Chance base de o bote dar certo (ajustada por tamanho e velocidade). */
@@ -15,7 +15,14 @@ const POUNCE_CHANCE = 0.36;
 const POUNCE_REST = 18;
 /** Multiplicador de velocidade em fuga ou perseguição (custa mais energia). */
 const FLEE_EFFORT = 1.25;
-const CHASE_EFFORT = 1.25;
+/** Predadores espreitam devagar e só disparam quando estão perto da presa. */
+const STALK_EFFORT = 0.75;
+const SPRINT_EFFORT = 1.6;
+const SPRINT_DISTANCE = 4;
+/** Energia por tick que uma raposa tira de comida miúda (roedores, insetos, frutos). */
+const FORAGE = 0.1;
+/** Ticks digerindo depois de comer: um predador saciado não caça. */
+const DIGEST_REST = 90;
 /** Água recuperada por tick bebendo na margem. */
 const DRINK_RATE = 0.06;
 /** Distância em que o casal consegue acasalar. */
@@ -58,27 +65,41 @@ export function updateFox(world: World, a: Animal): void {
         if (world.rng.chance(POUNCE_CHANCE * bigger * faster)) {
           world.kill(prey, 'eaten');
           a.energy = Math.min(cap, a.energy + MEAT[prey.species] * prey.traits.size);
+          a.rest = DIGEST_REST;
         }
       } else {
-        moved = moveToward(world, a, prey.x, prey.y, CHASE_EFFORT);
+        moved = moveToward(world, a, prey.x, prey.y, dist > SPRINT_DISTANCE ? STALK_EFFORT : SPRINT_EFFORT);
       }
     } else {
-      a.state = 'wander';
-      moved = wander(world, a, 0.9);
+      // Sem presa à vista, a raposa fuça atrás de roedores, insetos e frutos:
+      // rende pouco, mas segura as épocas magras.
+      a.state = 'forage';
+      moved = wander(world, a, 0.5);
+      a.energy = Math.min(cap, a.energy + FORAGE);
     }
   } else {
     a.state = 'wander';
-    moved = wander(world, a, 0.4);
+    // Saciada, a raposa fica quase parada poupando energia.
+    moved = wander(world, a, 0.15);
   }
 
   a.energy -= metabolism(a, moved, world.climate.cold);
 }
 
-/** A presa mais próxima à vista: um coelho ou um filhote de cervo. */
+/** Arbusto acima disso é uma moita fechada, onde uma presa pequena some de vista. */
+const COVER = 0.6;
+
+/** Verdadeiro se o animal está escondido numa moita densa. */
+export function inCover(world: World, a: Animal): boolean {
+  return world.plants.shrubs[world.terrain.index(a.cellX, a.cellY)] > COVER;
+}
+
+/** A presa mais próxima à vista: um coelho ou um filhote de cervo fora das moitas. */
 function nearestPrey(world: World, fox: Animal): Animal | null {
   const r = fox.traits.vision;
-  const rabbit = world.index.rabbit.nearest(fox.x, fox.y, r);
-  const fawn = world.index.deer.nearest(fox.x, fox.y, r, isPrey);
+  const visible = (a: Animal) => !inCover(world, a);
+  const rabbit = world.index.rabbit.nearest(fox.x, fox.y, r, visible);
+  const fawn = world.index.deer.nearest(fox.x, fox.y, r, (a) => isPrey(a) && visible(a));
   if (!rabbit || !fawn) return rabbit ?? fawn;
   const dr = (rabbit.x - fox.x) ** 2 + (rabbit.y - fox.y) ** 2;
   const df = (fawn.x - fox.x) ** 2 + (fawn.y - fox.y) ** 2;
@@ -213,7 +234,7 @@ export function readyToBreed(a: Animal): boolean {
   // Machos gastam pouco com a ninhada, então precisam de menos reserva.
   let need = cfg.reproduceAt * a.traits.size * (a.sex === 'female' ? 1 : 0.6);
   // Quem já está a caminho do parceiro não desiste por gastar um pouco no trajeto.
-  if (a.partner) need *= 0.85;
+  if (a.partner) need *= 0.7;
   return a.alive && a.age >= cfg.maturityAge && a.cooldown <= 0 && a.energy >= need;
 }
 
@@ -246,6 +267,9 @@ function courtship(world: World, a: Animal): number {
     // Os machos esperam ser escolhidos; só as fêmeas procuram.
     if (a.sex === 'male' || a.mateSearch-- > 0) return -1;
     a.mateSearch = 15;
+    // Predadores são territoriais: com o território lotado, a fêmea não cria filhotes.
+    const territory = SPECIES[a.species].territory;
+    if (territory && world.index[a.species].within(a.x, a.y, territory.radius).length > territory.max) return -1;
     p = chooseMate(world, a);
     if (!p) return -1;
     a.partner = p;

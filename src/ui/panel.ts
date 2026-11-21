@@ -261,6 +261,8 @@ function stateLabel(a: Animal): string {
       return 'fugindo!';
     case 'hunt':
       return 'caçando';
+    case 'forage':
+      return 'fuçando atrás de comida miúda';
     case 'drink':
       return 'com sede (indo beber)';
     case 'mate':
